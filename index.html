@@ -246,9 +246,9 @@
     <div id="pill-wrapper" class="pill-wrapper fixed bottom-0 left-0 right-0 z-30 pb-safe pointer-events-none">
         <div class="max-w-3xl mx-auto px-4 pb-2 pt-6 pointer-events-auto">
             
-            <div class="hidden lg:flex items-center gap-6 mb-3 ml-4">
-                <button onclick="setMode('chat')" id="btn-chat-pc" class="text-xs font-bold uppercase tracking-widest text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white pb-1 transition-colors drop-shadow-sm">Converse</button>
-                <button onclick="setMode('image')" id="btn-image-pc" class="text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-b-2 border-transparent pb-1 flex items-center gap-1.5 transition-colors drop-shadow-sm"><i data-lucide="image" class="w-3.5 h-3.5"></i> Manifest Image</button>
+            <div class="hidden lg:inline-flex items-center gap-6 mb-3 ml-4 px-5 py-2.5 bg-white/70 dark:bg-[#1e1e20]/70 backdrop-blur-xl border border-black/5 dark:border-white/10 rounded-2xl shadow-sm">
+                <button onclick="setMode('chat')" id="btn-chat-pc" class="text-xs font-bold uppercase tracking-widest text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white pb-0.5 transition-colors drop-shadow-sm">Converse</button>
+                <button onclick="setMode('image')" id="btn-image-pc" class="text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-b-2 border-transparent pb-0.5 flex items-center gap-1.5 transition-colors drop-shadow-sm"><i data-lucide="image" class="w-3.5 h-3.5"></i> Manifest Image</button>
             </div>
             
             <div id="attachment-preview" class="hidden relative ml-4 mb-3 flex gap-2 overflow-x-auto custom-scrollbar max-w-full"></div>
@@ -365,8 +365,8 @@
             
             const btnChatPC = document.getElementById('btn-chat-pc');
             const btnImgPC = document.getElementById('btn-image-pc');
-            if (btnChatPC) btnChatPC.className = m === 'chat' ? 'text-xs font-bold uppercase tracking-widest text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white pb-1 transition-colors drop-shadow-sm' : 'text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-b-2 border-transparent pb-1 transition-colors drop-shadow-sm';
-            if (btnImgPC) btnImgPC.className = m === 'image' ? 'text-xs font-bold uppercase tracking-widest text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white pb-1 flex items-center gap-1.5 transition-colors drop-shadow-sm' : 'text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-b-2 border-transparent pb-1 flex items-center gap-1.5 transition-colors drop-shadow-sm';
+            if (btnChatPC) btnChatPC.className = m === 'chat' ? 'text-xs font-bold uppercase tracking-widest text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white pb-0.5 transition-colors drop-shadow-sm' : 'text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-b-2 border-transparent pb-0.5 transition-colors drop-shadow-sm';
+            if (btnImgPC) btnImgPC.className = m === 'image' ? 'text-xs font-bold uppercase tracking-widest text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white pb-0.5 flex items-center gap-1.5 transition-colors drop-shadow-sm' : 'text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-b-2 border-transparent pb-0.5 flex items-center gap-1.5 transition-colors drop-shadow-sm';
             
             const btnChatMob = document.getElementById('btn-chat-mobile');
             const btnImgMob = document.getElementById('btn-image-mobile');
@@ -565,7 +565,7 @@
             clearAllAttachments();
 
             try {
-                // 🚀 POINTING TO THE RENDER BACKEND
+                // 🚀 POINTING TO THE RENDER BACKEND (Cloudflare Config)
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
                 const data = await res.json();
                 
