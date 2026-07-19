@@ -566,7 +566,7 @@
 
             try {
                 // 🚀 POINTING TO THE RENDER BACKEND
-                const res = await fetch('https://YOUR-RENDER-URL.onrender.com/api/chat', { method: 'POST', body: formData });
+                const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
                 const data = await res.json();
                 
                 const loader = document.getElementById(`loader-${msgId}`);
