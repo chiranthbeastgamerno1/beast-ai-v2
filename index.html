@@ -52,7 +52,7 @@
             opacity: 1;
         }
         
-        #prism-container {
+        #aurora-container {
             position: fixed; inset: 0; z-index: -1;
             background-color: #09090b; /* Deep slate base */
             opacity: 0;
@@ -61,7 +61,7 @@
         }
         
         body.dark #bg-light-aurora { opacity: 0; }
-        body.dark #prism-container { opacity: 1; }
+        body.dark #aurora-container { opacity: 1; }
 
         .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 24px); }
         .pt-safe { padding-top: env(safe-area-inset-top); }
@@ -85,19 +85,6 @@
         @keyframes jump {
             0%, 80%, 100% { transform: scale(0); opacity: 0.3; } 
             40% { transform: scale(1); opacity: 1; }
-        }
-
-        .image-gen-grid {
-            background-image: radial-gradient(circle, #a1a1aa 1.5px, transparent 1.5px);
-            background-size: 16px 16px;
-            background-position: 0 0;
-            mask-image: radial-gradient(circle at center, black 10%, transparent 75%);
-            -webkit-mask-image: radial-gradient(circle at center, black 10%, transparent 75%);
-            animation: grid-move 3s linear infinite;
-        }
-        @keyframes grid-move {
-            0% { background-position: 0 0; }
-            100% { background-position: 16px 16px; }
         }
 
         .prose, .prose p, .prose li, .prose span, .prose a { font-weight: 500 !important; }
@@ -126,7 +113,7 @@
 
     <!-- WebGL Background Elements -->
     <div id="bg-light-aurora"></div>
-    <div id="prism-container"></div>
+    <div id="aurora-container"></div>
 
     <div id="name-modal" class="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center hidden backdrop-blur-md px-4 transition-opacity">
         <div class="bg-white dark:bg-[#1e1e20] p-6 sm:p-8 rounded-3xl shadow-2xl max-w-sm w-full border border-zinc-200 dark:border-zinc-800">
@@ -674,134 +661,124 @@
         };
     </script>
 
-    <!-- WebGL Prism Integration (Vanilla JS Port) -->
+    <!-- 🌌 Smooth Aurora WebGL Integration (Vanilla JS Port) -->
     <script type="module">
-        import { Renderer, Triangle, Program, Mesh } from 'https://esm.sh/ogl@1.0.11';
+        import { Renderer, Program, Mesh, Color, Triangle } from 'https://esm.sh/ogl@1.0.11';
 
+        // 🎨 CUSTOM DARK MODE PALETTE (Deep Slate -> Blue -> Purple)
         const config = {
-            height: 3.5, baseWidth: 5.5, animationType: 'rotate', glow: 1.2, 
-            offset: { x: 0, y: 0 }, noise: 0.5, transparent: true, scale: 3.6, 
-            hueShift: -0.2, colorFrequency: 1.5, hoverStrength: 2, 
-            inertia: 0.05, bloom: 1.5, timeScale: 0.5
+            colorStops: ['#09090b', '#2563eb', '#9333ea'], 
+            amplitude: 1.0, 
+            blend: 0.5, 
+            speed: 1.1
         };
 
-        const container = document.getElementById('prism-container');
+        const container = document.getElementById('aurora-container');
 
-        const H = Math.max(0.001, config.height);
-        const BASE_HALF = Math.max(0.001, config.baseWidth) * 0.5;
-        const GLOW = Math.max(0.0, config.glow);
-        const NOISE = Math.max(0.0, config.noise);
-        const SAT = config.transparent ? 1.5 : 1;
-        const SCALE = Math.max(0.001, config.scale);
-        const HUE = config.hueShift || 0;
-        const CFREQ = Math.max(0.0, config.colorFrequency || 1);
-        const BLOOM = Math.max(0.0, config.bloom || 1);
-        const TS = Math.max(0, config.timeScale || 1);
-        const HOVSTR = Math.max(0, config.hoverStrength || 1);
-        const INERT = Math.max(0, Math.min(1, config.inertia || 0.12));
-
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const renderer = new Renderer({ dpr, alpha: config.transparent, antialias: false });
+        const renderer = new Renderer({ alpha: true, premultipliedAlpha: true, antialias: true });
         const gl = renderer.gl;
-        gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.BLEND);
-
+        gl.clearColor(0, 0, 0, 0);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.canvas.style.backgroundColor = 'transparent';
         Object.assign(gl.canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', display: 'block' });
         container.appendChild(gl.canvas);
 
-        const vertex = `attribute vec2 position; void main() { gl_Position = vec4(position, 0.0, 1.0); }`;
+        const VERT = `#version 300 es
+        in vec2 position;
+        void main() { gl_Position = vec4(position, 0.0, 1.0); }`;
 
-        const fragment = `
+        const FRAG = `#version 300 es
         precision highp float;
-        uniform vec2 iResolution; uniform float iTime; uniform float uHeight; uniform float uBaseHalf;
-        uniform mat3 uRot; uniform int uUseBaseWobble; uniform float uGlow; uniform vec2 uOffsetPx;
-        uniform float uNoise; uniform float uSaturation; uniform float uScale; uniform float uHueShift;
-        uniform float uColorFreq; uniform float uBloom; uniform float uCenterShift; uniform float uInvBaseHalf;
-        uniform float uInvHeight; uniform float uMinAxis; uniform float uPxScale; uniform float uTimeScale;
+        uniform float uTime; uniform float uAmplitude; uniform vec3 uColorStops[3]; uniform vec2 uResolution; uniform float uBlend;
+        out vec4 fragColor;
 
-        vec4 tanh4(vec4 x){ vec4 e2x = exp(2.0*x); return (e2x - 1.0) / (e2x + 1.0); }
-        float rand(vec2 co){ return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453123); }
-        float sdOctaAnisoInv(vec3 p){ vec3 q = vec3(abs(p.x) * uInvBaseHalf, abs(p.y) * uInvHeight, abs(p.z) * uInvBaseHalf); float m = q.x + q.y + q.z - 1.0; return m * uMinAxis * 0.5773502691896258; }
-        float sdPyramidUpInv(vec3 p){ float oct = sdOctaAnisoInv(p); float halfSpace = -p.y; return max(oct, halfSpace); }
-        mat3 hueRotation(float a){ float c = cos(a), s = sin(a); mat3 W = mat3(0.299, 0.587, 0.114, 0.299, 0.587, 0.114, 0.299, 0.587, 0.114); mat3 U = mat3(0.701, -0.587, -0.114, -0.299, 0.413, -0.114, -0.300, -0.588, 0.886); mat3 V = mat3(0.168, -0.331, 0.500, 0.328, 0.035, -0.500, -0.497, 0.296, 0.201); return W + U * c + V * s; }
+        vec3 permute(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
+        float snoise(vec2 v){
+            const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+            vec2 i  = floor(v + dot(v, C.yy)); vec2 x0 = v - i + dot(i, C.xx);
+            vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+            vec4 x12 = x0.xyxy + C.xxzz; x12.xy -= i1; i = mod(i, 289.0);
+            vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+            vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
+            m = m * m; m = m * m;
+            vec3 x = 2.0 * fract(p * C.www) - 1.0; vec3 h = abs(x) - 0.5; vec3 ox = floor(x + 0.5);
+            vec3 a0 = x - ox; m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+            vec3 g; g.x  = a0.x  * x0.x  + h.x  * x0.y; g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+            return 130.0 * dot(m, g);
+        }
 
-        void main(){
-            vec2 f = (gl_FragCoord.xy - 0.5 * iResolution.xy - uOffsetPx) * uPxScale;
-            float z = 5.0; float d = 0.0; vec3 p; vec4 o = vec4(0.0);
-            mat2 wob = mat2(1.0);
-            if (uUseBaseWobble == 1) { float t = iTime * uTimeScale; float c0 = cos(t + 0.0); float c1 = cos(t + 33.0); float c2 = cos(t + 11.0); wob = mat2(c0, c1, c2, c0); }
-            for (int i = 0; i < 100; i++) {
-                p = vec3(f, z); p.xz = p.xz * wob; p = uRot * p; vec3 q = p; q.y += uCenterShift;
-                d = 0.1 + 0.2 * abs(sdPyramidUpInv(q)); z -= d;
-                o += (sin((p.y + z) * uColorFreq + vec4(0.0, 1.0, 2.0, 3.0)) + 1.0) / d;
-            }
-            o = tanh4(o * o * (uGlow * uBloom) / 1e5);
-            vec3 col = o.rgb; col += (rand(gl_FragCoord.xy + vec2(iTime)) - 0.5) * uNoise; col = clamp(col, 0.0, 1.0);
-            float L = dot(col, vec3(0.2126, 0.7152, 0.0722)); col = clamp(mix(vec3(L), col, uSaturation), 0.0, 1.0);
-            if(abs(uHueShift) > 0.0001) col = clamp(hueRotation(uHueShift) * col, 0.0, 1.0);
-            gl_FragColor = vec4(col, o.a);
+        struct ColorStop { vec3 color; float position; };
+
+        #define COLOR_RAMP(colors, factor, finalColor) { \
+            int index = 0; \
+            for (int i = 0; i < 2; i++) { \
+                ColorStop currentColor = colors[i]; \
+                bool isInBetween = currentColor.position <= factor; \
+                index = int(mix(float(index), float(i), float(isInBetween))); \
+            } \
+            ColorStop currentColor = colors[index]; \
+            ColorStop nextColor = colors[index + 1]; \
+            float range = nextColor.position - currentColor.position; \
+            float lerpFactor = (factor - currentColor.position) / range; \
+            finalColor = mix(currentColor.color, nextColor.color, lerpFactor); \
+        }
+
+        void main() {
+            vec2 uv = gl_FragCoord.xy / uResolution;
+            ColorStop colors[3];
+            colors[0] = ColorStop(uColorStops[0], 0.0);
+            colors[1] = ColorStop(uColorStops[1], 0.5);
+            colors[2] = ColorStop(uColorStops[2], 1.0);
+            vec3 rampColor;
+            COLOR_RAMP(colors, uv.x, rampColor);
+            
+            float height = snoise(vec2(uv.x * 2.0 + uTime * 0.1, uTime * 0.25)) * 0.5 * uAmplitude;
+            height = exp(height); height = (uv.y * 2.0 - height + 0.2);
+            float intensity = 0.6 * height;
+            float midPoint = 0.20;
+            float auroraAlpha = smoothstep(midPoint - uBlend * 0.5, midPoint + uBlend * 0.5, intensity);
+            vec3 auroraColor = intensity * rampColor;
+            fragColor = vec4(auroraColor * auroraAlpha, auroraAlpha);
         }
         `;
 
         const geometry = new Triangle(gl);
-        const iResBuf = new Float32Array(2);
-        const offsetPxBuf = new Float32Array(2);
+        if (geometry.attributes.uv) delete geometry.attributes.uv;
+
+        const colorStopsArray = config.colorStops.map(hex => {
+            const c = new Color(hex); return [c.r, c.g, c.b];
+        });
 
         const program = new Program(gl, {
-            vertex, fragment,
+            vertex: VERT, fragment: FRAG,
             uniforms: {
-                iResolution: { value: iResBuf }, iTime: { value: 0 },
-                uHeight: { value: H }, uBaseHalf: { value: BASE_HALF },
-                uUseBaseWobble: { value: config.animationType !== 'hover' && config.animationType !== '3drotate' ? 1 : 0 },
-                uRot: { value: new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]) },
-                uGlow: { value: GLOW }, uOffsetPx: { value: offsetPxBuf },
-                uNoise: { value: NOISE }, uSaturation: { value: SAT }, uScale: { value: SCALE },
-                uHueShift: { value: HUE }, uColorFreq: { value: CFREQ }, uBloom: { value: BLOOM },
-                uCenterShift: { value: H * 0.25 }, uInvBaseHalf: { value: 1 / BASE_HALF },
-                uInvHeight: { value: 1 / H }, uMinAxis: { value: Math.min(BASE_HALF, H) },
-                uPxScale: { value: 1 / ((gl.drawingBufferHeight || 1) * 0.1 * SCALE) },
-                uTimeScale: { value: TS }
+                uTime: { value: 0 }, uAmplitude: { value: config.amplitude },
+                uColorStops: { value: colorStopsArray },
+                uResolution: { value: [window.innerWidth, window.innerHeight] },
+                uBlend: { value: config.blend }
             }
         });
+
         const mesh = new Mesh(gl, { geometry, program });
 
         const resize = () => {
             renderer.setSize(window.innerWidth, window.innerHeight);
-            iResBuf[0] = gl.drawingBufferWidth; iResBuf[1] = gl.drawingBufferHeight;
-            program.uniforms.uPxScale.value = 1 / ((gl.drawingBufferHeight || 1) * 0.1 * SCALE);
+            if (program) program.uniforms.uResolution.value = [window.innerWidth, window.innerHeight];
         };
         window.addEventListener('resize', resize); resize();
 
-        const rotBuf = new Float32Array(9);
-        const setMat3FromEuler = (yawY, pitchX, rollZ, out) => {
-            const cy = Math.cos(yawY), sy = Math.sin(yawY), cx = Math.cos(pitchX), sx = Math.sin(pitchX), cz = Math.cos(rollZ), sz = Math.sin(rollZ);
-            out[0] = cy * cz + sy * sx * sz; out[1] = cx * sz; out[2] = -sy * cz + cy * sx * sz;
-            out[3] = -cy * sz + sy * sx * cz; out[4] = cx * cz; out[5] = sy * sz + cy * sx * cz;
-            out[6] = sy * cx; out[7] = -sx; out[8] = cy * cx; return out;
-        };
-
-        let raf = 0, yaw = 0, pitch = 0, roll = 0;
-        const wY = 0.5, wX = 0.4, wZ = 0.2, phX = 1, phZ = 2;
-        const t0 = performance.now();
-
-        const render = t => {
-            raf = requestAnimationFrame(render);
+        let animateId = 0; const startT = performance.now();
+        const update = t => {
+            animateId = requestAnimationFrame(update);
             // 🚀 GPU SAVER: Only calculate WebGL when Dark Mode is active!
             if(!document.body.classList.contains('dark')) return;
 
-            const time = (t - t0) * 0.001;
-            program.uniforms.iTime.value = time;
-
-            if (config.animationType === 'rotate') {
-                rotBuf.set([1, 0, 0, 0, 1, 0, 0, 0, 1]);
-                program.uniforms.uRot.value = rotBuf;
-            } else if (config.animationType === '3drotate') {
-                const tScaled = time * TS;
-                yaw = tScaled * wY; pitch = Math.sin(tScaled * wX + phX) * 0.6; roll = Math.sin(tScaled * wZ + phZ) * 0.5;
-                program.uniforms.uRot.value = setMat3FromEuler(yaw, pitch, roll, rotBuf);
-            }
+            const time = (t - startT) * 0.001;
+            program.uniforms.uTime.value = time * config.speed;
             renderer.render({ scene: mesh });
         };
-        raf = requestAnimationFrame(render);
+        animateId = requestAnimationFrame(update);
     </script>
 </body>
 </html>
