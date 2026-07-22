@@ -213,56 +213,52 @@
                 <button onclick="setMode('image')" id="btn-image-pc" class="text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-b-2 border-transparent pb-0.5 flex items-center gap-1.5 transition-colors drop-shadow-sm"><i data-lucide="image" class="w-3.5 h-3.5"></i> Manifest Image</button>
             </div>
             
-            <!-- 🚀 NEW: Dropdown Menu Mode Selector -->
-            <div id="speed-selector-wrap" class="relative mb-3 ml-2 sm:ml-4 max-w-full z-40">
-                <button id="speed-dropdown-btn" onclick="toggleSpeedDropdown(event)" class="flex items-center gap-2 px-4 py-2.5 bg-white/90 dark:bg-[#1e1e20]/90 backdrop-blur-xl border border-black/5 dark:border-white/10 rounded-[1rem] shadow-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
-                    <span id="current-speed-label" class="text-sm font-bold text-zinc-900 dark:text-white">Normal</span>
-                    <i data-lucide="chevron-down" class="w-4 h-4 text-zinc-500 transition-transform duration-300" id="speed-chevron"></i>
-                </button>
-
-                <div id="speed-dropdown-menu" class="absolute bottom-[calc(100%+0.5rem)] left-0 w-[270px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden hidden flex-col transform origin-bottom-left transition-all">
-                    
-                    <button onclick="setSpeed('fast')" class="speed-option w-full text-left px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="fast">
-                        <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
-                        <div>
-                            <div class="text-[15px] font-bold text-zinc-900 dark:text-white leading-tight">Fast</div>
-                            <div class="text-[13px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Answers quickly</div>
-                        </div>
-                    </button>
-
-                    <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
-
-                    <button onclick="setSpeed('normal')" class="speed-option w-full text-left px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="normal">
-                        <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-100 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
-                        <div>
-                            <div class="text-[15px] font-bold text-zinc-900 dark:text-white leading-tight">Normal</div>
-                            <div class="text-[13px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Thinks and answers at normal speed</div>
-                        </div>
-                    </button>
-
-                    <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
-
-                    <button onclick="setSpeed('thinking')" class="speed-option w-full text-left px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="thinking">
-                        <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
-                        <div>
-                            <div class="text-[15px] font-bold text-zinc-900 dark:text-white leading-tight">Thinking</div>
-                            <div class="text-[13px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Thinks for a longer time and Gives answers</div>
-                        </div>
-                    </button>
-                    
-                </div>
-            </div>
-
             <div id="attachment-preview" class="hidden relative ml-4 mb-3 flex gap-2 overflow-x-auto custom-scrollbar max-w-full"></div>
             
+            <!-- 🚀 UPDATED MAIN PILL WITH INSIDE DROPDOWN -->
             <div class="relative flex items-end w-full bg-white/90 dark:bg-[#1e1e20]/90 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_20px_rgb(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgb(0,0,0,0.6)] px-1 sm:px-2 py-1 border border-zinc-200 dark:border-zinc-700">
-                <button onclick="document.getElementById('file-input').click()" class="p-3 sm:p-3.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-1.5"><i data-lucide="paperclip" class="w-5 h-5"></i></button>
+                
+                <button onclick="document.getElementById('file-input').click()" class="p-3 sm:p-3.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-1.5 flex-shrink-0"><i data-lucide="paperclip" class="w-5 h-5"></i></button>
                 <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf" multiple onchange="handleFile(this)">
                 
-                <textarea id="user-input" rows="1" class="flex-1 bg-transparent border-none outline-none resize-none max-h-32 py-3.5 px-2 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5" placeholder="Ask Beast..." onkeydown="handleEnter(event)"></textarea>
+                <textarea id="user-input" rows="1" class="flex-1 min-w-0 bg-transparent border-none outline-none resize-none max-h-32 py-3.5 px-2 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5" placeholder="Ask Beast..." onkeydown="handleEnter(event)"></textarea>
                 
-                <button class="p-3 sm:p-3.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-1.5"><i data-lucide="mic" class="w-5 h-5"></i></button>
-                <button id="send-btn" onclick="sendMessage()" class="p-3 bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 mb-1.5 mr-0.5 shadow-sm"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
+                <!-- 🚀 SPEED SELECTOR NESTED HERE -->
+                <div id="speed-selector-wrap" class="relative mb-[0.35rem] sm:mb-1.5 mr-1 sm:mr-2 z-40 flex-shrink-0">
+                    <button id="speed-dropdown-btn" onclick="toggleSpeedDropdown(event)" class="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 bg-zinc-100 dark:bg-[#2e2e31] rounded-2xl hover:bg-zinc-200 dark:hover:bg-[#3a3a3d] transition-colors text-zinc-700 dark:text-zinc-300">
+                        <span id="current-speed-label" class="text-xs sm:text-sm font-semibold tracking-wide">Normal</span>
+                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300" id="speed-chevron"></i>
+                    </button>
+
+                    <div id="speed-dropdown-menu" class="absolute bottom-[calc(100%+0.8rem)] right-0 w-[230px] sm:w-[260px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden flex-col transform origin-bottom-right transition-all">
+                        <button onclick="setSpeed('fast')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="fast">
+                            <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
+                            <div>
+                                <div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Fast</div>
+                                <div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Answers quickly</div>
+                            </div>
+                        </button>
+                        <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
+                        <button onclick="setSpeed('normal')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="normal">
+                            <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-100 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
+                            <div>
+                                <div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Normal</div>
+                                <div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Thinks and answers at normal speed</div>
+                            </div>
+                        </button>
+                        <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
+                        <button onclick="setSpeed('thinking')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="thinking">
+                            <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
+                            <div>
+                                <div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Thinking</div>
+                                <div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Thinks for a longer time</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <button class="p-3 sm:p-3.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-1.5 flex-shrink-0"><i data-lucide="mic" class="w-5 h-5"></i></button>
+                <button id="send-btn" onclick="sendMessage()" class="p-3 bg-zinc-900 hover:bg-black dark:bg-[#3245ff] dark:hover:bg-[#2536e0] text-white dark:text-white rounded-full transition-transform active:scale-95 mb-1.5 mr-0.5 shadow-sm flex-shrink-0"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
             </div>
         </div>
     </div>
@@ -276,7 +272,7 @@
         let userName = localStorage.getItem('beast-username');
         let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
 
-        // 🚀 Dropdown Logic
+        // 🚀 Dropdown Logic inside the input pill
         let isSpeedMenuOpen = false;
         function toggleSpeedDropdown(e) {
             e.stopPropagation();
@@ -323,7 +319,7 @@
         }
 
         window.onload = () => { 
-            fetch('https://beast-ai-v2.onrender.com/').catch(() => {}); // Wake up backend
+            fetch('https://beast-ai-v2.onrender.com/').catch(() => {}); // Wake up Render backend
             if(localStorage.getItem('beast-theme') === 'dark') document.body.classList.add('dark'); 
             else if (localStorage.getItem('beast-theme') === 'light') document.body.classList.remove('dark');
             
@@ -362,7 +358,7 @@
             if (m === 'image') speedWrap.style.display = 'none'; else speedWrap.style.display = 'block';
         }
         
-        async function forceDownload(e, url) { e.preventDefault(); const btn = e.currentTarget; btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Downloading...`; lucide.createIcons(); try { const response = await fetch(url); const blob = await response.blob(); const blobUrl = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.style.display = 'none'; a.href = blobUrl; a.download = `Beast-Image-${Date.now()}.jpg`; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(blobUrl); document.body.removeChild(a); } catch (err) { const img = new Image(); img.crossOrigin = "Anonymous"; img.onload = () => { const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height; canvas.getContext('2d').drawImage(img, 0, 0); canvas.toBlob((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `Beast-Image-${Date.now()}.jpg`; a.click(); }, 'image/jpeg'); }; img.src = url; } setTimeout(() => { btn.innerHTML = `<i data-lucide="download" class="w-4 h-4"></i> Download`; lucide.createIcons(); }, 1000); }
+        async function forceDownload(e, url) { e.preventDefault(); const btn = e.currentTarget; btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i>`; lucide.createIcons(); try { const response = await fetch(url); const blob = await response.blob(); const blobUrl = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.style.display = 'none'; a.href = blobUrl; a.download = `Beast-Image-${Date.now()}.jpg`; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(blobUrl); document.body.removeChild(a); } catch (err) { const img = new Image(); img.crossOrigin = "Anonymous"; img.onload = () => { const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height; canvas.getContext('2d').drawImage(img, 0, 0); canvas.toBlob((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `Beast-Image-${Date.now()}.jpg`; a.click(); }, 'image/jpeg'); }; img.src = url; } setTimeout(() => { btn.innerHTML = `<i data-lucide="download" class="w-4 h-4"></i>`; lucide.createIcons(); }, 1000); }
         function loadHistory() { const keys = Object.keys(localStorage).filter(k => k.startsWith('BeastSession_')).sort().reverse(); const mobileList = document.getElementById('history-list-mobile'); const desktopList = document.getElementById('history-list-desktop'); mobileList.innerHTML = ''; desktopList.innerHTML = ''; keys.forEach(id => { const session = JSON.parse(localStorage.getItem(id)); const preview = session.title || session.messages?.[0]?.message || "Manifestation"; const isCurrent = id === currentSessionId; const html = `<div class="sidebar-btn group p-0 hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap overflow-hidden ${isCurrent ? 'bg-black/5 dark:bg-white/10' : ''}"><div class="flex items-center flex-1 overflow-hidden h-full w-full" onclick="loadSession('${id}')"><div class="sidebar-icon text-zinc-500 flex-shrink-0"><i data-lucide="message-square" class="w-4 h-4"></i></div><div class="text-sm truncate nav-text text-zinc-900 dark:text-white font-semibold flex-1 text-left ml-1">${preview}</div></div><div class="flex items-center flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity pr-3 z-10 gap-1 nav-text"><button onclick="renameSession('${id}', event)" class="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button><button onclick="togglePin('${id}', event)" class="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="pin" class="w-3.5 h-3.5 ${session.pinned ? 'fill-current text-zinc-900 dark:text-white lg:opacity-100' : ''}"></i></button></div></div>`; mobileList.insertAdjacentHTML('beforeend', html); desktopList.insertAdjacentHTML('beforeend', html); }); lucide.createIcons(); }
         function renameSession(id, e) { e.stopPropagation(); const session = JSON.parse(localStorage.getItem(id)); const currentName = session.title || session.messages?.[0]?.message || "Manifestation"; const newName = prompt("Rename this chat:", currentName); if (newName !== null && newName.trim() !== "") { session.title = newName.trim(); localStorage.setItem(id, JSON.stringify(session)); loadHistory(); } }
         function clearUnpinned() { if(!confirm("Clear all history?")) return; const keys = Object.keys(localStorage).filter(k => k.startsWith('BeastSession_')); keys.forEach(id => { const s = JSON.parse(localStorage.getItem(id)); if(!s.pinned) localStorage.removeItem(id); }); startNewChat(); loadHistory(); }
