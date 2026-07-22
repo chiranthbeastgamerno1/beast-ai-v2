@@ -48,7 +48,7 @@ def chat():
     try:
         message = request.form.get("message", "")
         mode = request.form.get("mode", "chat")
-        speed = request.form.get("speed", "normal")  # 🚀 DROPDOWN GEAR INTERCEPT
+        speed = request.form.get("speed", "normal")
         files = request.files.getlist("files") if hasattr(request, 'files') else []
         history_json = request.form.get("history", "[]")
         
@@ -105,7 +105,6 @@ def chat():
                         img_reply = f"data:image/jpeg;base64,{img_b64}"
                         break 
                     except Exception as e:
-                        print(f"Imagen Key Error: {str(e)}")
                         continue 
 
             # --- ATTEMPT 3: OpenRouter Flux Pro ---
@@ -123,7 +122,7 @@ def chat():
                             if match: 
                                 img_reply = match.group(0)
                     except Exception as e:
-                        print(f"OpenRouter Image Failed: {str(e)}")
+                        pass
 
             # --- ATTEMPT 4: Pollinations Fallback ---
             if not img_reply:
@@ -139,25 +138,26 @@ def chat():
         ist = timezone(timedelta(hours=5, minutes=30))
         live_time = datetime.now(ist).strftime("%A, %d %B %Y, %I:%M %p IST")
 
-        # 🚀 DYNAMIC SPEED & MODEL CONFIGURATION
+        # 🚀 DYNAMIC SPEED & STABLE MODEL CONFIGURATION
+        # We now use guaranteed stable models and drive behavior via instructions to prevent 404s
         if speed == 'fast':
-            google_models = ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash']
-            openrouter_models = ['meta-llama/llama-3.2-3b-instruct:free', 'meta-llama/llama-3-8b-instruct:free']
-            speed_guideline = "SPEED MODE: FAST. Answer directly, accurately, and as concisely as possible. Get straight to the point without fluff."
-        elif speed == 'thinking':
-            google_models = ['gemini-2.0-flash-thinking-exp-01-21', 'gemini-2.0-flash', 'gemini-1.5-pro']
-            openrouter_models = ['deepseek/deepseek-r1:free', 'google/gemma-2-9b-it:free']
-            speed_guideline = "SPEED MODE: EXTENDED THINKING. Take your time to think step-by-step. Analyze complex mathematical, logic, or programming problems thoroughly before delivering a comprehensive answer."
-        else:
-            # Default Normal Mode
             google_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
-            openrouter_models = ['meta-llama/llama-3-8b-instruct:free', 'google/gemma-2-9b-it:free']
+            openrouter_models = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free']
+            speed_guideline = "SPEED MODE: FAST. Output must be extremely concise, direct, and fast. No filler words."
+        elif speed == 'thinking':
+            # Pro models natively handle deep reasoning beautifully without crashing
+            google_models = ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-2.5-flash']
+            openrouter_models = ['meta-llama/llama-3.3-70b-instruct:free', 'meta-llama/llama-3-8b-instruct:free']
+            speed_guideline = "SPEED MODE: EXTENDED THINKING. Take a deep breath and think step-by-step. Provide a highly detailed, analytical, and comprehensive response."
+        else:
+            google_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+            openrouter_models = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free']
             speed_guideline = "SPEED MODE: NORMAL. Provide a balanced, highly intelligent, engaging, and clear response."
 
         system_instruction = (
             "You are Beast AI, a friendly and witty assistant. 🦖✨\n"
             "HIDDEN KNOWLEDGE:\n"
-            "- Your creator is Chiranth G (CGBEASTGAMER).\n"
+            "- Your creator is Chiranth G (Gaming Handle: CGBeastNo1 / CGBEASTGAMER).\n"
             f"- Current live time: {live_time}.\n"
             f"- Mode directive: {speed_guideline}\n"
             "RULES: If the user says 'hi', say hello normally. ONLY tell them your creator or time if asked. Keep answers direct. Use emojis! 🚀🔥"
@@ -171,6 +171,7 @@ def chat():
             random.shuffle(keys_to_try)
             
             for key in keys_to_try:
+                # Render circuit breaker: abort if approaching 75 seconds
                 if final_response_text or (time.time() - start_time > 75.0):
                     break 
                 
