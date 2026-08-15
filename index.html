@@ -1,14 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full w-full overflow-hidden">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Beast AI</title>
+    
+    <!-- Mobile Fullscreen & PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Beast AI">
+    <meta name="theme-color" content="#09090b" id="theme-color-meta">
     
     <link rel="icon" href="/beast_ai.png" type="image/png">
     <link rel="apple-touch-icon" href="/beast_ai.png">
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#ffffff" id="theme-color-meta">
     
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script>
@@ -24,16 +30,24 @@
         @import url('https://fonts.cdnfonts.com/css/metropolis-2');
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@900&display=swap');
         
-        body { 
-            font-family: 'Metropolis', sans-serif; 
-            font-weight: 500;
-            overflow: hidden; 
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale; 
+        html, body {
+            height: 100%;
+            height: 100dvh;
+            width: 100vw;
+            overflow: hidden;
+            overscroll-behavior: none;
+            position: fixed;
             margin: 0;
             padding: 0;
             background-color: transparent;
+            font-family: 'Metropolis', sans-serif; 
+            font-weight: 500;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale; 
+            -webkit-user-select: none;
+            user-select: none;
         }
+
         .font-beast-logo { font-family: 'Playfair Display', serif; }
 
         @keyframes aurora {
@@ -62,14 +76,14 @@
         body.dark #bg-light-aurora { opacity: 0; }
         body.dark #aurora-container { opacity: 1; }
 
-        .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 24px); }
-        .pt-safe { padding-top: env(safe-area-inset-top); }
+        .pb-safe { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+        .pt-safe { padding-top: max(12px, env(safe-area-inset-top)); }
 
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.2); border-radius: 4px; }
         body.dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.2); }
         .sidebar-scroll::-webkit-scrollbar { display: none; }
-        .sidebar-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: auto; }
+        .sidebar-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: hidden; }
 
         .jumping-dots span {
             display: inline-block;
@@ -83,7 +97,7 @@
         .jumping-dots span:nth-child(2) { animation-delay: -0.16s; }
         @keyframes jump { 0%, 80%, 100% { transform: scale(0); opacity: 0.3; } 40% { transform: scale(1); opacity: 1; } }
 
-        .prose, .prose p, .prose li, .prose span, .prose a { font-weight: 500 !important; }
+        .prose, .prose p, .prose li, .prose span, .prose a { font-weight: 500 !important; -webkit-user-select: text; user-select: text; }
         .prose strong, .prose b { font-weight: 800 !important; color: inherit; }
         .prose p { margin-top: 0.4em; margin-bottom: 0.4em; }
         .prose ul > li::marker { color: #6b7280; font-size: 1.2em; }
@@ -139,7 +153,7 @@
 
     <div id="mobile-overlay" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/40 z-40 hidden lg:hidden backdrop-blur-sm transition-opacity pt-safe"></div>
 
-    <aside id="mobile-sidebar" class="fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-xl z-50 transform -translate-x-full transition-transform duration-300 flex flex-col pt-safe lg:hidden border-r border-black/5 dark:border-white/5">
+    <aside id="mobile-sidebar" class="fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-xl z-50 transform -translate-x-full transition-transform duration-300 flex flex-col pt-safe lg:hidden border-r border-black/5 dark:border-white/5 pb-safe">
         <div class="flex items-center justify-between p-4">
             <button onclick="toggleMobileSidebar()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-800 dark:text-zinc-200 rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="menu"></i></button>
             <button onclick="startNewChat()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-800 dark:text-zinc-200 rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="edit"></i></button>
@@ -189,14 +203,15 @@
         </div>
     </aside>
 
-    <div id="main-content" class="main-content-shift flex-1 flex flex-col min-w-0 relative bg-transparent pt-safe z-10">
-        <header class="flex items-center px-4 py-3 lg:hidden relative z-10 bg-transparent">
+    <div id="main-content" class="main-content-shift flex-1 flex flex-col min-w-0 relative bg-transparent pt-safe z-10 h-full">
+        <header class="flex items-center px-4 py-2 lg:hidden relative z-10 bg-transparent flex-shrink-0">
             <button onclick="toggleMobileSidebar()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-900 dark:text-white rounded-full"><i data-lucide="menu"></i></button>
             <h1 class="ml-2 text-lg font-black tracking-widest uppercase text-zinc-900 dark:text-white font-beast-logo">Beast</h1>
         </header>
-        <main id="scroll-container" class="flex-1 overflow-y-auto px-4 sm:px-8 pb-48 custom-scrollbar relative z-10">
-            <div class="max-w-3xl mx-auto space-y-8 mt-10">
-                <div id="welcome-box" class="w-full mx-auto text-center flex flex-col items-center justify-center mt-[15vh]">
+        
+        <main id="scroll-container" class="flex-1 overflow-y-auto px-4 sm:px-8 pb-36 sm:pb-48 custom-scrollbar relative z-10">
+            <div class="max-w-3xl mx-auto space-y-8 mt-4 sm:mt-10">
+                <div id="welcome-box" class="w-full mx-auto text-center flex flex-col items-center justify-center mt-[12vh] sm:mt-[15vh]">
                     <img src="/beast_ai.png" class="w-16 h-16 sm:w-20 sm:h-20 mb-6 object-cover rounded-full shadow-lg shadow-black/10 dark:shadow-white/5 animate-pulse bg-black" alt="Beast AI">
                     <h2 id="greeting-text" class="text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 pb-2 drop-shadow-md"></h2>
                 </div>
@@ -206,7 +221,7 @@
     </div>
 
     <div id="pill-wrapper" class="pill-wrapper fixed bottom-0 left-0 right-0 z-30 pb-safe pointer-events-none">
-        <div class="max-w-3xl mx-auto px-4 pb-2 pt-6 pointer-events-auto">
+        <div class="max-w-3xl mx-auto px-3 sm:px-4 pb-2 pt-4 pointer-events-auto">
             
             <div class="hidden lg:inline-flex items-center gap-6 mb-3 ml-4 px-5 py-2.5 bg-white/70 dark:bg-[#1e1e20]/70 backdrop-blur-xl border border-black/5 dark:border-white/10 rounded-2xl shadow-sm">
                 <button onclick="setMode('chat')" id="btn-chat-pc" class="text-xs font-bold uppercase tracking-widest text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white pb-0.5 transition-colors drop-shadow-sm">Converse</button>
@@ -215,20 +230,17 @@
             
             <div id="attachment-preview" class="hidden relative ml-4 mb-3 flex gap-2 overflow-x-auto custom-scrollbar max-w-full"></div>
             
-            <!-- 🚀 UPDATED MAIN PILL -->
-            <div class="relative flex items-end w-full bg-white/90 dark:bg-[#1e1e20]/90 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_20px_rgb(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgb(0,0,0,0.6)] px-1 sm:px-2 py-1 border border-zinc-200 dark:border-zinc-700">
+            <div class="relative flex items-end w-full bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_25px_rgb(0,0,0,0.12)] dark:shadow-[0_4px_25px_rgb(0,0,0,0.6)] px-1 sm:px-2 py-1 border border-zinc-200 dark:border-zinc-700/80">
                 
-                <button onclick="document.getElementById('file-input').click()" class="p-3 sm:p-3.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-1.5 flex-shrink-0"><i data-lucide="paperclip" class="w-5 h-5"></i></button>
+                <button onclick="document.getElementById('file-input').click()" class="p-3 sm:p-3.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-1 flex-shrink-0"><i data-lucide="paperclip" class="w-5 h-5"></i></button>
                 <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf" multiple onchange="handleFile(this)">
                 
                 <textarea id="user-input" rows="1" class="flex-1 min-w-0 bg-transparent border-none outline-none resize-none max-h-32 py-3.5 px-2 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5" placeholder="Ask Beast..." onkeydown="handleEnter(event)"></textarea>
                 
-                <!-- 🚀 PERFECTLY CENTERED RIGHT-SIDE CONTROLS -->
-                <div class="flex items-center mb-1.5 pr-0.5 flex-shrink-0">
+                <div class="flex items-center mb-1 pr-0.5 flex-shrink-0">
                     
-                    <!-- Speed Dropdown -->
                     <div id="speed-selector-wrap" class="relative z-40 mr-1 sm:mr-2">
-                        <button id="speed-dropdown-btn" onclick="toggleSpeedDropdown(event)" class="flex items-center gap-1.5 px-3 py-2 bg-zinc-100 dark:bg-[#2e2e31] rounded-2xl hover:bg-zinc-200 dark:hover:bg-[#3a3a3d] transition-colors text-zinc-700 dark:text-zinc-300">
+                        <button id="speed-dropdown-btn" onclick="toggleSpeedDropdown(event)" class="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-zinc-100 dark:bg-[#2e2e31] rounded-2xl hover:bg-zinc-200 dark:hover:bg-[#3a3a3d] transition-colors text-zinc-700 dark:text-zinc-300">
                             <span id="current-speed-label" class="text-xs sm:text-sm font-semibold tracking-wide">Normal</span>
                             <i data-lucide="chevron-down" class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300" id="speed-chevron"></i>
                         </button>
@@ -260,11 +272,9 @@
                         </div>
                     </div>
 
-                    <!-- Mic -->
-                    <button class="p-3 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full"><i data-lucide="mic" class="w-5 h-5"></i></button>
+                    <button class="p-2.5 sm:p-3 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full"><i data-lucide="mic" class="w-5 h-5"></i></button>
                     
-                    <!-- Send (Reverted to standard monochrome style) -->
-                    <button id="send-btn" onclick="sendMessage()" class="p-3 bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
+                    <button id="send-btn" onclick="sendMessage()" class="p-2.5 sm:p-3 bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm ml-0.5"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
                 </div>
             </div>
         </div>
@@ -279,7 +289,6 @@
         let userName = localStorage.getItem('beast-username');
         let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
 
-        // Dropdown Logic
         let isSpeedMenuOpen = false;
         function toggleSpeedDropdown(e) {
             e.stopPropagation();
@@ -326,7 +335,7 @@
         }
 
         window.onload = () => { 
-            fetch('https://beast-ai-v2.onrender.com/').catch(() => {}); // Wake up Render backend
+            fetch('https://beast-ai-v2.onrender.com/').catch(() => {});
             if(localStorage.getItem('beast-theme') === 'dark') document.body.classList.add('dark'); 
             else if (localStorage.getItem('beast-theme') === 'light') document.body.classList.remove('dark');
             
@@ -399,13 +408,12 @@
             chatBox.insertAdjacentHTML('beforeend', beastHtml); lucide.createIcons(); document.getElementById('scroll-container').scrollTop = document.getElementById('scroll-container').scrollHeight;
 
             const formData = new FormData(); formData.append('message', msg); formData.append('mode', currentMode);
-            formData.append('speed', currentSpeed); // 🚀 ATTACHING THE SELECTED SPEED FOR PYTHON
+            formData.append('speed', currentSpeed);
 
             let session = JSON.parse(localStorage.getItem(currentSessionId)) || { pinned: false, messages: [] }; let chatHistory = session.messages.slice(-100).map(m => ({ type: m.type, message: m.message || "" })); formData.append('history', JSON.stringify(chatHistory));
             for (let i = 0; i < attachedFiles.length; i++) { formData.append('files', await compressImage(attachedFiles[i].file)); } clearAllAttachments();
 
             try {
-                // 🚀 CLOUDFLARE BACKEND PATH
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
                 const data = await res.json();
                 const loader = document.getElementById(`loader-${msgId}`); const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); const targetBox = targetBoxWrap.querySelector('.prose');
