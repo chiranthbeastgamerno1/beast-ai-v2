@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Beast AI</title>
     
-    <!-- Mobile Fullscreen & PWA Meta Tags -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -83,7 +82,7 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.2); border-radius: 4px; }
         body.dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.2); }
         .sidebar-scroll::-webkit-scrollbar { display: none; }
-        .sidebar-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: hidden; }
+        .sidebar-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: auto; }
 
         .jumping-dots span {
             display: inline-block;
@@ -196,6 +195,11 @@
                 <div class="sidebar-icon"><i data-lucide="settings"></i></div>
                 <span class="nav-text text-sm font-semibold ml-1">Settings</span>
             </button>
+            <!-- Desktop Fullscreen Button -->
+            <button onclick="toggleFullScreen()" class="sidebar-btn hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-800 dark:text-zinc-200">
+                <div class="sidebar-icon"><i data-lucide="maximize" id="fs-icon-desktop"></i></div>
+                <span class="nav-text text-sm font-semibold ml-1" id="fs-text-desktop">Fullscreen</span>
+            </button>
             <button onclick="toggleTheme()" class="sidebar-btn hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-800 dark:text-zinc-200">
                 <div class="sidebar-icon"><i data-lucide="moon" id="theme-icon-desktop"></i></div>
                 <span class="nav-text text-sm font-semibold ml-1" id="theme-text-desktop">Dark Mode</span>
@@ -204,9 +208,12 @@
     </aside>
 
     <div id="main-content" class="main-content-shift flex-1 flex flex-col min-w-0 relative bg-transparent pt-safe z-10 h-full">
+        <!-- 🚀 Mobile Header with Fullscreen Icon -->
         <header class="flex items-center px-4 py-2 lg:hidden relative z-10 bg-transparent flex-shrink-0">
             <button onclick="toggleMobileSidebar()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-900 dark:text-white rounded-full"><i data-lucide="menu"></i></button>
             <h1 class="ml-2 text-lg font-black tracking-widest uppercase text-zinc-900 dark:text-white font-beast-logo">Beast</h1>
+            <div class="flex-1"></div>
+            <button onclick="toggleFullScreen()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-900 dark:text-white rounded-full"><i data-lucide="maximize" id="fs-icon-mobile"></i></button>
         </header>
         
         <main id="scroll-container" class="flex-1 overflow-y-auto px-4 sm:px-8 pb-36 sm:pb-48 custom-scrollbar relative z-10">
@@ -230,6 +237,7 @@
             
             <div id="attachment-preview" class="hidden relative ml-4 mb-3 flex gap-2 overflow-x-auto custom-scrollbar max-w-full"></div>
             
+            <!-- 🚀 UPDATED MAIN PILL -->
             <div class="relative flex items-end w-full bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_25px_rgb(0,0,0,0.12)] dark:shadow-[0_4px_25px_rgb(0,0,0,0.6)] px-1 sm:px-2 py-1 border border-zinc-200 dark:border-zinc-700/80">
                 
                 <button onclick="document.getElementById('file-input').click()" class="p-3 sm:p-3.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-1 flex-shrink-0"><i data-lucide="paperclip" class="w-5 h-5"></i></button>
@@ -237,10 +245,12 @@
                 
                 <textarea id="user-input" rows="1" class="flex-1 min-w-0 bg-transparent border-none outline-none resize-none max-h-32 py-3.5 px-2 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5" placeholder="Ask Beast..." onkeydown="handleEnter(event)"></textarea>
                 
-                <div class="flex items-center mb-1 pr-0.5 flex-shrink-0">
+                <!-- 🚀 PERFECTLY CENTERED RIGHT-SIDE CONTROLS -->
+                <div class="flex items-center mb-1.5 pr-0.5 flex-shrink-0">
                     
+                    <!-- Speed Dropdown -->
                     <div id="speed-selector-wrap" class="relative z-40 mr-1 sm:mr-2">
-                        <button id="speed-dropdown-btn" onclick="toggleSpeedDropdown(event)" class="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-zinc-100 dark:bg-[#2e2e31] rounded-2xl hover:bg-zinc-200 dark:hover:bg-[#3a3a3d] transition-colors text-zinc-700 dark:text-zinc-300">
+                        <button id="speed-dropdown-btn" onclick="toggleSpeedDropdown(event)" class="flex items-center gap-1.5 px-3 py-2 bg-zinc-100 dark:bg-[#2e2e31] rounded-2xl hover:bg-zinc-200 dark:hover:bg-[#3a3a3d] transition-colors text-zinc-700 dark:text-zinc-300">
                             <span id="current-speed-label" class="text-xs sm:text-sm font-semibold tracking-wide">Normal</span>
                             <i data-lucide="chevron-down" class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300" id="speed-chevron"></i>
                         </button>
@@ -272,9 +282,11 @@
                         </div>
                     </div>
 
-                    <button class="p-2.5 sm:p-3 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full"><i data-lucide="mic" class="w-5 h-5"></i></button>
+                    <!-- Mic -->
+                    <button class="p-3 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full"><i data-lucide="mic" class="w-5 h-5"></i></button>
                     
-                    <button id="send-btn" onclick="sendMessage()" class="p-2.5 sm:p-3 bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm ml-0.5"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
+                    <!-- Send (Reverted to standard monochrome style) -->
+                    <button id="send-btn" onclick="sendMessage()" class="p-3 bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
                 </div>
             </div>
         </div>
@@ -289,6 +301,28 @@
         let userName = localStorage.getItem('beast-username');
         let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
 
+        // Fullscreen API Logic
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch((err) => {
+                    console.log(`Error attempting to enable fullscreen: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            const isFS = !!document.fullscreenElement;
+            document.getElementById('fs-icon-mobile').setAttribute('data-lucide', isFS ? 'minimize' : 'maximize');
+            document.getElementById('fs-icon-desktop').setAttribute('data-lucide', isFS ? 'minimize' : 'maximize');
+            document.getElementById('fs-text-desktop').innerText = isFS ? 'Exit Fullscreen' : 'Fullscreen';
+            lucide.createIcons();
+        });
+
+        // Dropdown Logic
         let isSpeedMenuOpen = false;
         function toggleSpeedDropdown(e) {
             e.stopPropagation();
@@ -335,7 +369,7 @@
         }
 
         window.onload = () => { 
-            fetch('https://beast-ai-v2.onrender.com/').catch(() => {});
+            fetch('https://beast-ai-v2.onrender.com/api/chat').catch(() => {});
             if(localStorage.getItem('beast-theme') === 'dark') document.body.classList.add('dark'); 
             else if (localStorage.getItem('beast-theme') === 'light') document.body.classList.remove('dark');
             
