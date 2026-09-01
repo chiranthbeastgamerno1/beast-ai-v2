@@ -199,7 +199,6 @@
                 <div class="sidebar-icon"><i data-lucide="settings"></i></div>
                 <span class="nav-text text-sm font-semibold ml-1">Settings</span>
             </button>
-            <!-- Desktop Fullscreen Button -->
             <button onclick="toggleFullScreen()" class="sidebar-btn hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-800 dark:text-zinc-200">
                 <div class="sidebar-icon"><i data-lucide="maximize" id="fs-icon-desktop"></i></div>
                 <span class="nav-text text-sm font-semibold ml-1" id="fs-text-desktop">Fullscreen</span>
@@ -212,7 +211,6 @@
     </aside>
 
     <div id="main-content" class="main-content-shift flex-1 flex flex-col min-w-0 relative bg-transparent pt-safe z-10 h-full">
-        <!-- 🚀 Mobile Header with Fullscreen Icon -->
         <header class="flex items-center px-4 py-2 lg:hidden relative z-10 bg-transparent flex-shrink-0">
             <button onclick="toggleMobileSidebar()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-900 dark:text-white rounded-full"><i data-lucide="menu"></i></button>
             <h1 class="ml-2 text-lg font-black tracking-widest uppercase text-zinc-900 dark:text-white font-beast-logo">Beast</h1>
@@ -241,13 +239,11 @@
             
             <div id="attachment-preview" class="hidden relative ml-4 mb-3 flex gap-2 overflow-x-auto custom-scrollbar max-w-full"></div>
             
-            <!-- 🚀 AUTO-EXPANDING TEXT AREA PILL -->
             <div class="relative flex items-end w-full bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_25px_rgb(0,0,0,0.12)] dark:shadow-[0_4px_25px_rgb(0,0,0,0.6)] px-1 sm:px-2 py-1 border border-zinc-200 dark:border-zinc-700/80">
                 
                 <button onclick="document.getElementById('file-input').click()" class="p-3 sm:p-3.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-1 flex-shrink-0"><i data-lucide="paperclip" class="w-5 h-5"></i></button>
                 <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf" multiple onchange="handleFile(this)">
                 
-                <!-- 🚀 TEXTAREA: NOW AUTO-EXPANDS AND HIDES SCROLLBAR UNTIL MAX HEIGHT -->
                 <textarea id="user-input" rows="1" class="flex-1 min-w-0 bg-transparent border-none outline-none resize-none max-h-[140px] py-3.5 px-2 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5 custom-scrollbar overflow-y-auto" placeholder="Ask Beast..." onkeydown="handleEnter(event)" oninput="this.style.height='auto'; this.style.height=(this.scrollHeight)+'px';"></textarea>
                 
                 <div class="flex items-center mb-1 pr-0.5 flex-shrink-0">
@@ -285,9 +281,9 @@
                         </div>
                     </div>
 
-                    <button class="p-2.5 sm:p-3 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full"><i data-lucide="mic" class="w-5 h-5"></i></button>
+                    <button id="mic-btn" onclick="toggleMic()" class="p-2.5 sm:p-3 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0"><i data-lucide="mic" class="w-5 h-5"></i></button>
                     
-                    <button id="send-btn" onclick="sendMessage()" class="p-2.5 sm:p-3 bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm ml-0.5"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
+                    <button id="send-btn" onclick="sendMessage()" class="p-2.5 sm:p-3 bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm ml-0.5 flex-shrink-0"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
                 </div>
             </div>
         </div>
@@ -302,7 +298,74 @@
         let userName = localStorage.getItem('beast-username');
         let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
 
-        // Fullscreen API
+        // 🚀 VOICE RECOGNITION LOGIC
+        let recognition;
+        let isRecording = false;
+
+        function toggleMic() {
+            const micBtn = document.getElementById('mic-btn');
+            const inputField = document.getElementById('user-input');
+
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert("The Beast's ears are blocked! 🦖 (Voice recognition is not supported in this browser. Try Chrome!)");
+                return;
+            }
+
+            if (isRecording) {
+                recognition.stop();
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            let originalValue = inputField.value;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                micBtn.innerHTML = '<i data-lucide="mic" class="w-5 h-5 animate-pulse text-red-500"></i>';
+                lucide.createIcons();
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        originalValue += (originalValue ? ' ' : '') + event.results[i][0].transcript;
+                        inputField.value = originalValue;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                        inputField.value = originalValue + (originalValue ? ' ' : '') + interimTranscript;
+                    }
+                }
+                inputField.style.height = 'auto';
+                inputField.style.height = (inputField.scrollHeight) + 'px';
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Voice recognition error:", event.error);
+                stopMicUI();
+            };
+
+            recognition.onend = () => {
+                stopMicUI();
+                inputField.focus();
+            };
+
+            recognition.start();
+        }
+
+        function stopMicUI() {
+            isRecording = false;
+            const micBtn = document.getElementById('mic-btn');
+            micBtn.innerHTML = '<i data-lucide="mic" class="w-5 h-5"></i>';
+            lucide.createIcons();
+        }
+
+        // Fullscreen API Logic
         function toggleFullScreen() {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().catch((err) => {
@@ -443,7 +506,7 @@
             for (let i = 0; i < attachedFiles.length; i++) { formData.append('files', await compressImage(attachedFiles[i].file)); } clearAllAttachments();
 
             try {
-                // 🚀 RENDER BACKEND URL
+                // 🚀 CLOUDFLARE BACKEND URL
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
                 const data = await res.json();
                 const loader = document.getElementById(`loader-${msgId}`); const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); const targetBox = targetBoxWrap.querySelector('.prose');
@@ -466,7 +529,6 @@
         function clearAllAttachments() { attachedFiles = []; document.getElementById('file-input').value = ''; renderAttachmentPreviews(); }
     </script>
 
-    <!-- 🌌 Smooth Aurora WebGL -->
     <script type="module">
         import { Renderer, Program, Mesh, Color, Triangle } from 'https://esm.sh/ogl@1.0.11';
         const config = { colorStops: ['#09090b', '#2563eb', '#9333ea'], amplitude: 1.0, blend: 0.5, speed: 1.1 };
