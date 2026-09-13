@@ -99,7 +99,7 @@
         .prose, .prose p, .prose li, .prose span, .prose a { font-weight: 500 !important; -webkit-user-select: text; user-select: text; }
         .prose strong, .prose b { font-weight: 800 !important; color: inherit; }
         
-        /* 🚀 FORCES ALL AI ITALICS TO BE NORMAL TEXT BUT BOLD */
+        /* Forces AI Italics to normal bold text */
         .prose em, .prose i { font-style: normal !important; font-weight: 800 !important; color: inherit; }
         
         .prose p { margin-top: 0.4em; margin-bottom: 0.4em; }
@@ -199,6 +199,7 @@
                 <div class="sidebar-icon"><i data-lucide="settings"></i></div>
                 <span class="nav-text text-sm font-semibold ml-1">Settings</span>
             </button>
+            <!-- Desktop Fullscreen Button -->
             <button onclick="toggleFullScreen()" class="sidebar-btn hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-800 dark:text-zinc-200">
                 <div class="sidebar-icon"><i data-lucide="maximize" id="fs-icon-desktop"></i></div>
                 <span class="nav-text text-sm font-semibold ml-1" id="fs-text-desktop">Fullscreen</span>
@@ -211,6 +212,7 @@
     </aside>
 
     <div id="main-content" class="main-content-shift flex-1 flex flex-col min-w-0 relative bg-transparent pt-safe z-10 h-full">
+        <!-- 🚀 Mobile Header with Fullscreen Icon -->
         <header class="flex items-center px-4 py-2 lg:hidden relative z-10 bg-transparent flex-shrink-0">
             <button onclick="toggleMobileSidebar()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-900 dark:text-white rounded-full"><i data-lucide="menu"></i></button>
             <h1 class="ml-2 text-lg font-black tracking-widest uppercase text-zinc-900 dark:text-white font-beast-logo">Beast</h1>
@@ -239,17 +241,19 @@
             
             <div id="attachment-preview" class="hidden relative ml-4 mb-3 flex gap-2 overflow-x-auto custom-scrollbar max-w-full"></div>
             
-            <div class="relative flex items-end w-full bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_25px_rgb(0,0,0,0.12)] dark:shadow-[0_4px_25px_rgb(0,0,0,0.6)] px-1 sm:px-2 py-1 border border-zinc-200 dark:border-zinc-700/80">
+            <!-- 🚀 RE-ENGINEERED INPUT PILL: PERFECT CENTERING & DYNAMIC SEND -->
+            <div class="relative flex items-end w-full bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_25px_rgb(0,0,0,0.12)] dark:shadow-[0_4px_25px_rgb(0,0,0,0.6)] p-1.5 sm:p-2 border border-zinc-200 dark:border-zinc-700/80">
                 
-                <button onclick="document.getElementById('file-input').click()" class="p-3 sm:p-3.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-1 flex-shrink-0"><i data-lucide="paperclip" class="w-5 h-5"></i></button>
+                <button onclick="document.getElementById('file-input').click()" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0 mb-0.5 sm:mb-1"><i data-lucide="paperclip" class="w-5 h-5"></i></button>
                 <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf" multiple onchange="handleFile(this)">
                 
-                <textarea id="user-input" rows="1" class="flex-1 min-w-0 bg-transparent border-none outline-none resize-none max-h-[140px] py-3.5 px-2 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5 custom-scrollbar overflow-y-auto" placeholder="Ask Beast..." onkeydown="handleEnter(event)" oninput="this.style.height='auto'; this.style.height=(this.scrollHeight)+'px';"></textarea>
+                <textarea id="user-input" rows="1" class="flex-1 min-w-0 bg-transparent border-none outline-none resize-none max-h-[140px] py-2 px-2 sm:py-2.5 sm:px-3 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5 sm:mb-1 custom-scrollbar overflow-y-auto" placeholder="Ask Beast..." onkeydown="handleEnter(event)" oninput="checkInput()"></textarea>
                 
-                <div class="flex items-center mb-1 pr-0.5 flex-shrink-0">
+                <div class="flex items-center gap-1 sm:gap-1.5 pr-1 flex-shrink-0 mb-[0.15rem] sm:mb-[0.30rem]">
                     
-                    <div id="speed-selector-wrap" class="relative z-40 mr-1 sm:mr-2">
-                        <button id="speed-dropdown-btn" onclick="toggleSpeedDropdown(event)" class="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-zinc-100 dark:bg-[#2e2e31] rounded-2xl hover:bg-zinc-200 dark:hover:bg-[#3a3a3d] transition-colors text-zinc-700 dark:text-zinc-300">
+                    <!-- Speed Dropdown -->
+                    <div id="speed-selector-wrap" class="relative z-40">
+                        <button id="speed-dropdown-btn" onclick="toggleSpeedDropdown(event)" class="h-9 sm:h-10 flex items-center gap-1.5 px-3 bg-zinc-100 dark:bg-[#2e2e31] rounded-2xl hover:bg-zinc-200 dark:hover:bg-[#3a3a3d] transition-colors text-zinc-700 dark:text-zinc-300">
                             <span id="current-speed-label" class="text-xs sm:text-sm font-semibold tracking-wide">Normal</span>
                             <i data-lucide="chevron-down" class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300" id="speed-chevron"></i>
                         </button>
@@ -281,14 +285,17 @@
                         </div>
                     </div>
 
-                    <button id="mic-btn" onclick="toggleMic()" class="p-2.5 sm:p-3 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0"><i data-lucide="mic" class="w-5 h-5"></i></button>
+                    <!-- Mic Button -->
+                    <button id="mic-btn" onclick="toggleMic()" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0"><i data-lucide="mic" class="w-5 h-5"></i></button>
                     
-                    <button id="send-btn" onclick="sendMessage()" class="p-2.5 sm:p-3 bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm ml-0.5 flex-shrink-0"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
+                    <!-- Dynamic Send Button (Blue & Hidden by Default) -->
+                    <button id="send-btn" onclick="sendMessage()" class="hidden w-9 h-9 sm:w-10 sm:h-10 items-center justify-center bg-[#2b5deb] hover:bg-[#1d4ed8] text-white rounded-full transition-transform active:scale-95 shadow-sm flex-shrink-0"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- UI Logic Script -->
     <script>
         lucide.createIcons();
         let currentMode = 'chat';
@@ -297,6 +304,25 @@
         let currentSessionId = null;
         let userName = localStorage.getItem('beast-username');
         let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
+
+        // 🚀 DYNAMIC SEND BUTTON & AUTO-EXPAND LOGIC
+        function checkInput() {
+            const inputField = document.getElementById('user-input');
+            const sendBtn = document.getElementById('send-btn');
+            
+            // Auto-expand height
+            inputField.style.height = 'auto';
+            inputField.style.height = (inputField.scrollHeight) + 'px';
+
+            // Show Send Button if there's text OR a file attached
+            if (inputField.value.trim().length > 0 || attachedFiles.length > 0) {
+                sendBtn.classList.remove('hidden');
+                sendBtn.classList.add('flex');
+            } else {
+                sendBtn.classList.add('hidden');
+                sendBtn.classList.remove('flex');
+            }
+        }
 
         // 🚀 VOICE RECOGNITION LOGIC
         let recognition;
@@ -341,8 +367,7 @@
                         inputField.value = originalValue + (originalValue ? ' ' : '') + interimTranscript;
                     }
                 }
-                inputField.style.height = 'auto';
-                inputField.style.height = (inputField.scrollHeight) + 'px';
+                checkInput(); // Auto-expand and show send button while talking!
             };
 
             recognition.onerror = (event) => {
@@ -437,7 +462,7 @@
             document.getElementById('theme-text-desktop').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
             document.getElementById('theme-icon-mobile').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); 
             document.getElementById('theme-text-mobile').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
-            lucide.createIcons(); initDesktopSidebar(); loadHistory(); initName(); setMode('chat');
+            lucide.createIcons(); initDesktopSidebar(); loadHistory(); initName(); setMode('chat'); checkInput();
         };
 
         function initName() { if (!userName) { document.getElementById('name-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('name-input').focus(), 100); } else { setGreeting(); } }
@@ -484,9 +509,9 @@
             const input = document.getElementById('user-input'); const msg = input.value.trim();
             if (!msg && attachedFiles.length === 0) return;
             
-            // 🚀 Reset Text Box Height upon sending
+            // 🚀 Reset Text Box and Hide Send Button
             input.value = ''; 
-            input.style.height = 'auto'; 
+            checkInput();
             
             if (!currentSessionId) currentSessionId = "BeastSession_" + Date.now();
             document.getElementById('welcome-box').style.display = 'none'; const chatBox = document.getElementById('chat-box'); chatBox.classList.replace('hidden', 'flex'); document.getElementById('send-btn').disabled = true;
@@ -506,7 +531,7 @@
             for (let i = 0; i < attachedFiles.length; i++) { formData.append('files', await compressImage(attachedFiles[i].file)); } clearAllAttachments();
 
             try {
-                // 🚀 CLOUDFLARE BACKEND URL
+                // 🚀 RENDER BACKEND URL
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
                 const data = await res.json();
                 const loader = document.getElementById(`loader-${msgId}`); const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); const targetBox = targetBoxWrap.querySelector('.prose');
@@ -524,11 +549,12 @@
 
         function appendHistoryMessage(m) { const chatBox = document.getElementById('chat-box'); if (m.type === 'user') { let inner = `<div class="flex justify-end w-full"><div class="bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md text-zinc-900 dark:text-zinc-100 px-5 py-3 rounded-[1.5rem] rounded-tr-sm max-w-[85%] text-[15px] sm:text-base leading-relaxed shadow-sm border border-black/5 dark:border-white/10">`; if (m.files && m.files.length > 0) { inner += `<div class="flex flex-wrap gap-2 justify-end mb-2">`; m.files.forEach(f => { if (f.isPdf) { inner += `<div class="px-3 py-2 bg-red-900/80 rounded border border-red-500 text-xs font-bold flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> ${f.name}</div>`; } else { inner += `<img src="${f.preview}" class="max-h-32 rounded-xl object-cover shadow-sm">`; } }); inner += `</div>`; } if (m.message) inner += `<span class="font-medium">${m.message}</span>`; chatBox.insertAdjacentHTML('beforeend', inner + `</div></div>`); } else { let contentHtml = ""; if (m.mode === 'image' && (m.message.startsWith('http') || m.message.startsWith('data:'))) { contentHtml = `<div class="flex flex-col items-start gap-4"><img src="${m.message}" class="max-w-full max-h-[350px] w-auto object-contain rounded-xl shadow-md border border-white/10"><button onclick="forceDownload(event, '${m.message}')" class="px-5 py-2.5 bg-zinc-900 text-white dark:bg-white dark:text-black text-xs font-bold uppercase tracking-widest rounded-full flex items-center gap-2 transition active:scale-95 shadow-lg"><i data-lucide="download" class="w-4 h-4"></i> Download</button></div>`; } else { contentHtml = marked.parse(m.message); } const html = `<div class="flex flex-col items-start w-full max-w-[90%] mb-6"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div><div class="pl-[2.7rem] sm:pl-[3.2rem] w-full"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100">${contentHtml}</div></div></div>`; chatBox.insertAdjacentHTML('beforeend', html); chatBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800')); } }
         function handleFile(inputElement) { const newFiles = Array.from(inputElement.files); if (attachedFiles.length + newFiles.length > 20) { alert("The Beast can process a max of 20 files! 🦖"); return; } newFiles.forEach(file => { const isPdf = file.type === 'application/pdf'; const reader = new FileReader(); reader.onload = (e) => { attachedFiles.push({ file: file, preview: isPdf ? null : e.target.result, isPdf: isPdf, name: file.name }); renderAttachmentPreviews(); }; reader.readAsDataURL(file); }); inputElement.value = ''; }
-        function renderAttachmentPreviews() { const container = document.getElementById('attachment-preview'); container.innerHTML = ''; if (attachedFiles.length === 0) { container.classList.replace('flex', 'hidden'); return; } container.classList.replace('hidden', 'flex'); attachedFiles.forEach((f, index) => { const div = document.createElement('div'); div.className = "relative flex-shrink-0 inline-block"; if (f.isPdf) { div.innerHTML = `<div class="h-14 w-14 bg-red-100 border-2 border-red-900 rounded-xl flex items-center justify-center text-xs font-bold text-red-900 shadow-sm p-1 text-center overflow-hidden"><i data-lucide="file-text" class="w-4 h-4 mb-1"></i></div>`; } else { div.innerHTML = `<img src="${f.preview}" class="h-14 w-auto rounded-xl shadow-sm object-cover">`; } div.innerHTML += `<button onclick="removeSpecificAttachment(${index})" class="absolute -top-2 -right-2 bg-zinc-800 text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`; container.appendChild(div); }); lucide.createIcons(); }
+        function renderAttachmentPreviews() { const container = document.getElementById('attachment-preview'); container.innerHTML = ''; if (attachedFiles.length === 0) { container.classList.replace('flex', 'hidden'); return; } container.classList.replace('hidden', 'flex'); attachedFiles.forEach((f, index) => { const div = document.createElement('div'); div.className = "relative flex-shrink-0 inline-block"; if (f.isPdf) { div.innerHTML = `<div class="h-14 w-14 bg-red-100 border-2 border-red-900 rounded-xl flex items-center justify-center text-xs font-bold text-red-900 shadow-sm p-1 text-center overflow-hidden"><i data-lucide="file-text" class="w-4 h-4 mb-1"></i></div>`; } else { div.innerHTML = `<img src="${f.preview}" class="h-14 w-auto rounded-xl shadow-sm object-cover">`; } div.innerHTML += `<button onclick="removeSpecificAttachment(${index})" class="absolute -top-2 -right-2 bg-zinc-800 text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`; container.appendChild(div); }); checkInput(); lucide.createIcons(); }
         function removeSpecificAttachment(index) { attachedFiles.splice(index, 1); renderAttachmentPreviews(); }
         function clearAllAttachments() { attachedFiles = []; document.getElementById('file-input').value = ''; renderAttachmentPreviews(); }
     </script>
 
+    <!-- 🌌 Smooth Aurora WebGL -->
     <script type="module">
         import { Renderer, Program, Mesh, Color, Triangle } from 'https://esm.sh/ogl@1.0.11';
         const config = { colorStops: ['#09090b', '#2563eb', '#9333ea'], amplitude: 1.0, blend: 0.5, speed: 1.1 };
