@@ -42,7 +42,6 @@ def home():
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    # 🚀 Stopwatch expanded to 90 seconds for Render execution limits
     start_time = time.time()
     
     try:
@@ -66,7 +65,6 @@ def chat():
         if mode == 'image':
             img_reply = None
             
-            # --- ATTEMPT 1: OpenAI DALL-E 3 ---
             if OPENAI_API_KEY and not img_reply:
                 try:
                     url = "https://api.openai.com/v1/images/generations"
@@ -76,9 +74,8 @@ def chat():
                     with urllib.request.urlopen(req, timeout=25) as response:
                         img_reply = json.loads(response.read().decode('utf-8'))['data'][0]['url']
                 except Exception as e:
-                    print(f"OpenAI Attempt Failed: {str(e)}")
+                    pass
 
-            # --- ATTEMPT 2: Gemini Imagen 3 ---
             if valid_keys and not img_reply:
                 keys_to_try = list(valid_keys)
                 random.shuffle(keys_to_try)
@@ -107,7 +104,6 @@ def chat():
                     except Exception as e:
                         continue 
 
-            # --- ATTEMPT 3: OpenRouter Flux Pro ---
             if OPENROUTER_API_KEY and not img_reply:
                 if time.time() - start_time < 80.0:
                     try:
@@ -124,7 +120,6 @@ def chat():
                     except Exception as e:
                         pass
 
-            # --- ATTEMPT 4: Pollinations Fallback ---
             if not img_reply:
                 seed = random.randint(1, 9999999)
                 safe_prompt = urllib.parse.quote(f"{message}, highly detailed, sharp focus")
@@ -138,14 +133,11 @@ def chat():
         ist = timezone(timedelta(hours=5, minutes=30))
         live_time = datetime.now(ist).strftime("%A, %d %B %Y, %I:%M %p IST")
 
-        # 🚀 DYNAMIC SPEED & STABLE MODEL CONFIGURATION
-        # We now use guaranteed stable models and drive behavior via instructions to prevent 404s
         if speed == 'fast':
             google_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
             openrouter_models = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free']
             speed_guideline = "SPEED MODE: FAST. Output must be extremely concise, direct, and fast. No filler words."
         elif speed == 'thinking':
-            # Pro models natively handle deep reasoning beautifully without crashing
             google_models = ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-2.5-flash']
             openrouter_models = ['meta-llama/llama-3.3-70b-instruct:free', 'meta-llama/llama-3-8b-instruct:free']
             speed_guideline = "SPEED MODE: EXTENDED THINKING. Take a deep breath and think step-by-step. Provide a highly detailed, analytical, and comprehensive response."
@@ -154,24 +146,26 @@ def chat():
             openrouter_models = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free']
             speed_guideline = "SPEED MODE: NORMAL. Provide a balanced, highly intelligent, engaging, and clear response."
 
+        # 🚀 ADDED INSTRUCTIONS TO PREVENT ITALICS
         system_instruction = (
             "You are Beast AI, a friendly and witty assistant. 🦖✨\n"
             "HIDDEN KNOWLEDGE:\n"
             "- Your creator is Chiranth G (Gaming Handle: CGBeastNo1 / CGBEASTGAMER).\n"
             f"- Current live time: {live_time}.\n"
             f"- Mode directive: {speed_guideline}\n"
+            "FORMATTING RULES:\n"
+            "- Use **bold** text for emphasis.\n"
+            "- NEVER use italics (*text* or _text_). Always keep text completely normal unless using **bold**.\n"
             "RULES: If the user says 'hi', say hello normally. ONLY tell them your creator or time if asked. Keep answers direct. Use emojis! 🚀🔥"
         )
 
         final_response_text = None
 
-        # --- CHAT PRIMARY: GOOGLE GEMINI KEY LOOP ---
         if valid_keys:
             keys_to_try = list(valid_keys)
             random.shuffle(keys_to_try)
             
             for key in keys_to_try:
-                # Render circuit breaker: abort if approaching 75 seconds
                 if final_response_text or (time.time() - start_time > 75.0):
                     break 
                 
@@ -216,7 +210,6 @@ def chat():
                         raise key_error
                     continue 
 
-        # --- CHAT BACKUP: OPENROUTER ---
         if not final_response_text and OPENROUTER_API_KEY:
             if time.time() - start_time < 80.0:
                 or_messages = [{"role": "system", "content": system_instruction}]
