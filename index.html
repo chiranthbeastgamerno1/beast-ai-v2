@@ -231,13 +231,13 @@
             <!-- 🚀 RE-ENGINEERED INPUT PILL -->
             <div class="relative flex items-end w-full bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_25px_rgb(0,0,0,0.12)] dark:shadow-[0_4px_25px_rgb(0,0,0,0.6)] p-1.5 sm:p-2 border border-zinc-200 dark:border-zinc-700/80">
                 
-                <!-- 🚀 PLUS DROPDOWN (Replacing Paperclip) -->
+                <!-- 🚀 PLUS DROPDOWN (Attachment & Generation Menu) -->
                 <div class="relative z-40 flex-shrink-0">
                     <button id="attach-dropdown-btn" onclick="toggleAttachDropdown(event)" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-0.5 sm:mb-1">
                         <i data-lucide="plus" id="plus-icon" class="w-5 h-5 transition-transform duration-300"></i>
                     </button>
-                    <!-- Expand width to accommodate Gen Options -->
-                    <div id="attach-dropdown-menu" class="absolute bottom-[calc(100%+0.8rem)] left-0 w-[200px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden flex-col transform origin-bottom-left transition-all p-1.5">
+                    <!-- Expand width to accommodate 4 items cleanly -->
+                    <div id="attach-dropdown-menu" class="absolute bottom-[calc(100%+0.8rem)] left-0 w-[230px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden flex-col transform origin-bottom-left transition-all p-1.5">
                         <button onclick="document.getElementById('file-input').click(); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
                             <i data-lucide="upload" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
                             <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Upload file</span>
@@ -249,6 +249,10 @@
                         <button onclick="setGenMode('video'); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
                             <i data-lucide="video" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
                             <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Video Generation</span>
+                        </button>
+                        <button onclick="setGenMode('video-fast'); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
+                            <i data-lucide="zap" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
+                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Video Generation - Fast</span>
                         </button>
                     </div>
                 </div>
@@ -266,14 +270,14 @@
                             <i data-lucide="chevron-down" class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300" id="speed-chevron"></i>
                         </button>
 
-                        <div id="speed-dropdown-menu" class="absolute bottom-[calc(100%+0.8rem)] right-0 w-[230px] sm:w-[260px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden flex-col transform origin-bottom-right transition-all">
+                        <div id="speed-dropdown-menu" class="absolute bottom-[calc(100%+0.8rem)] right-0 w-[200px] sm:w-[220px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden flex-col transform origin-bottom-right transition-all">
                             
-                            <!-- Removed descriptions and kept only model names as requested -->
+                            <!-- Bare Model Names Only -->
                             <button onclick="setSpeed('fast')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="fast">
                                 <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
                                 <div>
                                     <div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Fast</div>
-                                    <div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug"><strong class="text-zinc-700 dark:text-zinc-300">Kira 3.5 Flash</strong></div>
+                                    <div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Kira 3.5 Flash</div>
                                 </div>
                             </button>
                             <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
@@ -282,7 +286,7 @@
                                 <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-100 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
                                 <div>
                                     <div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Normal</div>
-                                    <div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug"><strong class="text-zinc-700 dark:text-zinc-300">gemini-3.8-flash</strong></div>
+                                    <div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">gemini-3.8-flash</div>
                                 </div>
                             </button>
                             <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
@@ -291,7 +295,7 @@
                                 <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
                                 <div>
                                     <div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">PRO</div>
-                                    <div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug"><strong class="text-zinc-700 dark:text-zinc-300">Grok 4.6</strong></div>
+                                    <div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Grok 4.6</div>
                                 </div>
                             </button>
                         </div>
@@ -310,12 +314,18 @@
     <!-- UI Logic Script -->
     <script>
         lucide.createIcons();
-        let currentMode = 'chat'; // Reintroduced to track generation modes
+        let currentMode = 'chat'; 
         let currentSpeed = 'normal'; 
         let attachedFiles = [];
         let currentSessionId = null;
         let userName = localStorage.getItem('beast-username');
         let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
+
+        // Universal Media Parser: Ensures any raw .mp4 links returned by the API are converted into playable HTML5 videos
+        function processMedia(text) {
+            if (!text) return "";
+            return text.replace(/(?:!\[.*?\]\()?(https?:\/\/[^\s)]+\.mp4)(?:\))?/gi, '\n\n<video src="$1" controls autoplay loop playsinline class="w-full rounded-xl shadow-md my-3 border border-black/5 dark:border-white/10"></video>\n\n');
+        }
 
         function checkInput() {
             const inputField = document.getElementById('user-input');
@@ -344,10 +354,14 @@
             }
         }
 
+        // Sets the internal mode and guides the user via the placeholder
         function setGenMode(type) {
             currentMode = type;
             const input = document.getElementById('user-input');
-            input.placeholder = type === 'image' ? 'Describe the image to generate...' : 'Describe the video to generate...';
+            if (type === 'image') input.placeholder = 'Kira 3.0 Image: Describe image...';
+            else if (type === 'video') input.placeholder = 'Kira 3.0 Video: Describe video...';
+            else if (type === 'video-fast') input.placeholder = 'Kira 3.0 Video Flash: Describe video...';
+            else input.placeholder = 'Ask Beast...';
             input.focus();
         }
 
@@ -497,7 +511,18 @@
             const beastHtml = `<div id="beast-wrap-${msgId}" class="flex flex-col items-start w-full max-w-[90%]"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div>${loaderHTML}<div id="beast-box-${msgId}" class="pl-[2.7rem] sm:pl-[3.2rem] w-full hidden"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100"></div></div></div>`;
             chatBox.insertAdjacentHTML('beforeend', beastHtml); lucide.createIcons(); document.getElementById('scroll-container').scrollTop = document.getElementById('scroll-container').scrollHeight;
 
-            const formData = new FormData(); formData.append('message', msg); formData.append('mode', currentMode); formData.append('speed', currentSpeed);
+            const formData = new FormData(); 
+            formData.append('message', msg); 
+            formData.append('mode', currentMode); 
+            formData.append('speed', currentSpeed);
+            
+            // Explicitly append the model string you requested for generation modes
+            let generationModel = 'None';
+            if (currentMode === 'image') generationModel = 'Kira 3.0 Image';
+            if (currentMode === 'video') generationModel = 'Kira 3.0 Video';
+            if (currentMode === 'video-fast') generationModel = 'Kira 3.0 Video Flash';
+            formData.append('generationModel', generationModel);
+
             let session = JSON.parse(localStorage.getItem(currentSessionId)) || { pinned: false, messages: [] }; let chatHistory = session.messages.slice(-100).map(m => ({ type: m.type, message: m.message || "" })); formData.append('history', JSON.stringify(chatHistory));
             for (let i = 0; i < attachedFiles.length; i++) { formData.append('files', await compressImage(attachedFiles[i].file)); } clearAllAttachments();
 
@@ -508,21 +533,44 @@
                 const loader = document.getElementById(`loader-${msgId}`); const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); const targetBox = targetBoxWrap.querySelector('.prose');
                 let replyText = data.reply || "Connection severed.";
                 
-                loader.style.display = 'none'; targetBoxWrap.classList.remove('hidden'); targetBox.innerHTML = marked.parse(replyText); targetBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800'));
+                loader.style.display = 'none'; targetBoxWrap.classList.remove('hidden'); 
+                targetBox.innerHTML = marked.parse(processMedia(replyText)); 
+                targetBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800'));
                 
                 lucide.createIcons(); session.messages.push({type:'user', message:msg, files: currentFilesSnapshot}, {type:'beast', message:replyText, mode: currentMode}); localStorage.setItem(currentSessionId, JSON.stringify(session));
             } catch(e) { document.getElementById(`loader-${msgId}`).style.display = 'none'; const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); targetBoxWrap.classList.remove('hidden'); targetBoxWrap.querySelector('.prose').innerHTML = marked.parse("The connection was severed! ⚡😵"); }
+            
             lucide.createIcons(); 
             document.getElementById('send-btn').disabled = false; 
             document.getElementById('scroll-container').scrollTop = document.getElementById('scroll-container').scrollHeight; 
             loadHistory();
 
-            // Reset UI mode back to regular chat after dispatching Generation request
+            // Reset UI back to standard text chat mode after dispatching the generation request
             currentMode = 'chat';
             document.getElementById('user-input').placeholder = "Ask Beast...";
         }
 
-        function appendHistoryMessage(m) { const chatBox = document.getElementById('chat-box'); if (m.type === 'user') { let inner = `<div class="flex justify-end w-full"><div class="bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md text-zinc-900 dark:text-zinc-100 px-5 py-3 rounded-[1.5rem] rounded-tr-sm max-w-[85%] text-[15px] sm:text-base leading-relaxed shadow-sm border border-black/5 dark:border-white/10">`; if (m.files && m.files.length > 0) { inner += `<div class="flex flex-wrap gap-2 justify-end mb-2">`; m.files.forEach(f => { if (f.isPdf) { inner += `<div class="px-3 py-2 bg-red-900/80 rounded border border-red-500 text-xs font-bold flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> ${f.name}</div>`; } else { inner += `<img src="${f.preview}" class="max-h-32 rounded-xl object-cover shadow-sm">`; } }); inner += `</div>`; } if (m.message) inner += `<span class="font-medium">${m.message}</span>`; chatBox.insertAdjacentHTML('beforeend', inner + `</div></div>`); } else { let contentHtml = marked.parse(m.message); const html = `<div class="flex flex-col items-start w-full max-w-[90%] mb-6"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div><div class="pl-[2.7rem] sm:pl-[3.2rem] w-full"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100">${contentHtml}</div></div></div>`; chatBox.insertAdjacentHTML('beforeend', html); chatBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800')); } }
+        function appendHistoryMessage(m) { 
+            const chatBox = document.getElementById('chat-box'); 
+            if (m.type === 'user') { 
+                let inner = `<div class="flex justify-end w-full"><div class="bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md text-zinc-900 dark:text-zinc-100 px-5 py-3 rounded-[1.5rem] rounded-tr-sm max-w-[85%] text-[15px] sm:text-base leading-relaxed shadow-sm border border-black/5 dark:border-white/10">`; 
+                if (m.files && m.files.length > 0) { 
+                    inner += `<div class="flex flex-wrap gap-2 justify-end mb-2">`; 
+                    m.files.forEach(f => { 
+                        if (f.isPdf) { inner += `<div class="px-3 py-2 bg-red-900/80 rounded border border-red-500 text-xs font-bold flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> ${f.name}</div>`; } 
+                        else { inner += `<img src="${f.preview}" class="max-h-32 rounded-xl object-cover shadow-sm">`; } 
+                    }); 
+                    inner += `</div>`; 
+                } 
+                if (m.message) inner += `<span class="font-medium">${m.message}</span>`; 
+                chatBox.insertAdjacentHTML('beforeend', inner + `</div></div>`); 
+            } else { 
+                let contentHtml = marked.parse(processMedia(m.message)); 
+                const html = `<div class="flex flex-col items-start w-full max-w-[90%] mb-6"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div><div class="pl-[2.7rem] sm:pl-[3.2rem] w-full"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100">${contentHtml}</div></div></div>`; 
+                chatBox.insertAdjacentHTML('beforeend', html); 
+                chatBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800')); 
+            } 
+        }
         function handleFile(inputElement) { const newFiles = Array.from(inputElement.files); if (attachedFiles.length + newFiles.length > 20) { alert("The Beast can process a max of 20 files! 🦖"); return; } newFiles.forEach(file => { const isPdf = file.type === 'application/pdf'; const reader = new FileReader(); reader.onload = (e) => { attachedFiles.push({ file: file, preview: isPdf ? null : e.target.result, isPdf: isPdf, name: file.name }); renderAttachmentPreviews(); }; reader.readAsDataURL(file); }); inputElement.value = ''; }
         function renderAttachmentPreviews() { const container = document.getElementById('attachment-preview'); container.innerHTML = ''; if (attachedFiles.length === 0) { container.classList.replace('flex', 'hidden'); checkInput(); return; } container.classList.replace('hidden', 'flex'); attachedFiles.forEach((f, index) => { const div = document.createElement('div'); div.className = "relative flex-shrink-0 inline-block"; if (f.isPdf) { div.innerHTML = `<div class="h-14 w-14 bg-red-100 border-2 border-red-900 rounded-xl flex items-center justify-center text-xs font-bold text-red-900 shadow-sm p-1 text-center overflow-hidden"><i data-lucide="file-text" class="w-4 h-4 mb-1"></i></div>`; } else { div.innerHTML = `<img src="${f.preview}" class="h-14 w-auto rounded-xl shadow-sm object-cover">`; } div.innerHTML += `<button onclick="removeSpecificAttachment(${index})" class="absolute -top-2 -right-2 bg-zinc-800 text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`; container.appendChild(div); }); checkInput(); lucide.createIcons(); }
         function removeSpecificAttachment(index) { attachedFiles.splice(index, 1); renderAttachmentPreviews(); }
