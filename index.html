@@ -313,7 +313,7 @@
         function closeSettings() { document.getElementById('settings-modal').classList.add('hidden'); }
         function saveSettings() { const input = document.getElementById('settings-name-input').value.trim(); if (input) { userName = input.toUpperCase(); localStorage.setItem('beast-username', userName); setGreeting(); closeSettings(); } }
         function setGreeting() { const nameToUse = userName || "MASTER"; const greetings = [`Ask away, ${nameToUse}!`, `The mic is yours, ${nameToUse}`, `Your move, ${nameToUse}!`]; document.getElementById('greeting-text').innerText = greetings[Math.floor(Math.random() * greetings.length)]; }
-        function initDesktopSidebar() { const sb = document.getElementById('desktop-sidebar'); const main = document.getElementById('main-content'); const pill = document.getElementById('pill-wrapper'); if (isDesktopSidebarLocked) { sb.classList.add('locked'); main.classList.add('locked'); pill.classList.add('locked'); } else { sb.classList.remove('locked'); main.classList.remove('locked'); pill.classList.remove('locked'); } }
+        function initDesktopSidebar() { const sb = document.getElementById('desktop-sidebar'); const main = document.getElementById('main-content'); const pill = document.getElementById('pill-wrapper'); if (isDesktopSidebarLocked) { sb.classList.add('locked'); main.classList.add('locked'); pill.classList.add('locked'); } else { sb.classList.remove('locked'); main.classList.remove('locked'); pill.classList.add('locked'); } }
         function toggleDesktopSidebar() { isDesktopSidebarLocked = !isDesktopSidebarLocked; localStorage.setItem('beast-sidebar-locked', isDesktopSidebarLocked); initDesktopSidebar(); }
         function toggleTheme() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('beast-theme', isDark ? 'dark' : 'light'); document.getElementById('theme-icon-mobile').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-mobile').innerText = isDark ? 'Light Mode' : 'Dark Mode'; document.getElementById('theme-icon-desktop').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-desktop').innerText = isDark ? 'Light Mode' : 'Dark Mode'; lucide.createIcons(); }
         function toggleMobileSidebar() { const sb = document.getElementById('mobile-sidebar'); const overlay = document.getElementById('mobile-overlay'); sb.classList.toggle('-translate-x-full'); overlay.classList.toggle('hidden'); }
@@ -342,7 +342,6 @@
             
             const currentFilesSnapshot = attachedFiles.map(f => ({ name: f.name, isPdf: f.isPdf, preview: f.preview }));
             
-            // 🚀 RESTORED mb-6 FOR CHAT BUBBLE SPACING
             let userHtml = `<div class="flex justify-end w-full mb-6"><div class="bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md text-zinc-900 dark:text-zinc-100 px-5 py-3 rounded-[1.5rem] rounded-tr-sm max-w-[85%] text-[15px] sm:text-base leading-relaxed shadow-sm border border-black/5 dark:border-white/10">`;
             
             if (currentFilesSnapshot.length > 0) { 
@@ -360,7 +359,6 @@
             const msgId = Date.now();
             let loaderHTML = `<div id="loader-${msgId}" class="pl-[2.7rem] sm:pl-[3.2rem]"><div class="jumping-dots text-zinc-500 dark:text-zinc-400 py-2"><span></span><span></span><span></span></div></div>`; 
             
-            // 🚀 RESTORED mb-6 FOR BEAST BUBBLE SPACING
             const beastHtml = `<div id="beast-wrap-${msgId}" class="flex flex-col items-start w-full max-w-[90%] mb-6"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div>${loaderHTML}<div id="beast-box-${msgId}" class="pl-[2.7rem] sm:pl-[3.2rem] w-full hidden"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100"></div></div></div>`;
             chatBox.insertAdjacentHTML('beforeend', beastHtml); 
             lucide.createIcons(); 
