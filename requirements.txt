@@ -1,5 +1,4 @@
-Flask
+flask
 flask-cors
 google-genai
-requests
 gunicorn
