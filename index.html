@@ -144,6 +144,7 @@
                     <img src="/beast_ai.png" class="w-16 h-16 sm:w-20 sm:h-20 mb-6 object-cover rounded-full shadow-lg shadow-black/10 dark:shadow-white/5 animate-pulse bg-black" alt="Beast AI">
                     <h2 id="greeting-text" class="text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 pb-2 drop-shadow-md"></h2>
                 </div>
+                <!-- 🚀 FIXED: Added py-4 to ensure proper scroll clearance -->
                 <div id="chat-box" class="w-full space-y-2 hidden flex-col pb-10 py-4"></div>
             </div>
         </main>
@@ -156,7 +157,6 @@
             
             <div class="relative flex items-end w-full bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_25px_rgb(0,0,0,0.12)] dark:shadow-[0_4px_25px_rgb(0,0,0,0.6)] p-1.5 sm:p-2 border border-zinc-200 dark:border-zinc-700/80">
                 
-                <!-- DROPDOWN: Attachments & Media Generation -->
                 <div class="relative z-40 flex-shrink-0">
                     <button id="attach-dropdown-btn" onclick="toggleAttachDropdown(event)" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-0.5 sm:mb-1">
                         <i data-lucide="plus" id="plus-icon" class="w-5 h-5 transition-transform duration-300"></i>
@@ -297,9 +297,8 @@
         }
 
         window.onload = () => { 
-            // CLOUDFLARE: Wakes up the external Render backend immediately
+            // 🚀 CLOUDFLARE FETCH WAKEUP: Pings the external Render backend immediately
             fetch('https://beast-ai-v2.onrender.com/api/chat').catch(() => {});
-            
             if(localStorage.getItem('beast-theme') === 'dark') document.body.classList.add('dark'); else if (localStorage.getItem('beast-theme') === 'light') document.body.classList.remove('dark');
             const isDark = document.body.classList.contains('dark');
             document.getElementById('theme-icon-desktop').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-desktop').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
@@ -342,6 +341,7 @@
             
             const currentFilesSnapshot = attachedFiles.map(f => ({ name: f.name, isPdf: f.isPdf, preview: f.preview }));
             
+            // 🚀 FIXED: RESTORED mb-6 FOR CHAT BUBBLE SPACING
             let userHtml = `<div class="flex justify-end w-full mb-6"><div class="bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md text-zinc-900 dark:text-zinc-100 px-5 py-3 rounded-[1.5rem] rounded-tr-sm max-w-[85%] text-[15px] sm:text-base leading-relaxed shadow-sm border border-black/5 dark:border-white/10">`;
             
             if (currentFilesSnapshot.length > 0) { 
@@ -359,6 +359,7 @@
             const msgId = Date.now();
             let loaderHTML = `<div id="loader-${msgId}" class="pl-[2.7rem] sm:pl-[3.2rem]"><div class="jumping-dots text-zinc-500 dark:text-zinc-400 py-2"><span></span><span></span><span></span></div></div>`; 
             
+            // 🚀 FIXED: RESTORED mb-6 FOR BEAST BUBBLE SPACING
             const beastHtml = `<div id="beast-wrap-${msgId}" class="flex flex-col items-start w-full max-w-[90%] mb-6"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div>${loaderHTML}<div id="beast-box-${msgId}" class="pl-[2.7rem] sm:pl-[3.2rem] w-full hidden"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100"></div></div></div>`;
             chatBox.insertAdjacentHTML('beforeend', beastHtml); 
             lucide.createIcons(); 
@@ -376,7 +377,7 @@
             clearAllAttachments();
 
             try {
-                // 🚀 CLOUDFLARE FETCH DIRECTED TO RENDER
+                // 🚀 CLOUDFLARE FETCH: Hard-pointed directly to Render server
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
                 const data = await res.json();
                 const loader = document.getElementById(`loader-${msgId}`); 
@@ -408,6 +409,7 @@
         function appendHistoryMessage(m) { 
             const chatBox = document.getElementById('chat-box'); 
             if (m.type === 'user') { 
+                // 🚀 RESTORED mb-6
                 let inner = `<div class="flex justify-end w-full mb-6"><div class="bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md text-zinc-900 dark:text-zinc-100 px-5 py-3 rounded-[1.5rem] rounded-tr-sm max-w-[85%] text-[15px] sm:text-base leading-relaxed shadow-sm border border-black/5 dark:border-white/10">`; 
                 if (m.files && m.files.length > 0) { 
                     inner += `<div class="flex flex-wrap gap-2 justify-end mb-2">`; 
@@ -421,6 +423,7 @@
                 chatBox.insertAdjacentHTML('beforeend', inner + `</div></div>`); 
             } else { 
                 let contentHtml = marked.parse(processMedia(m.message)); 
+                // 🚀 RESTORED mb-6
                 const html = `<div class="flex flex-col items-start w-full max-w-[90%] mb-6"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div><div class="pl-[2.7rem] sm:pl-[3.2rem] w-full"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100">${contentHtml}</div></div></div>`; 
                 chatBox.insertAdjacentHTML('beforeend', html); 
                 chatBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800')); 
