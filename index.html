@@ -35,6 +35,7 @@
         body.dark #aurora-container { opacity: 1; }
         .pb-safe { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
         .pt-safe { padding-top: max(12px, env(safe-area-inset-top)); }
+        #scroll-container { scrollbar-gutter: stable both-edges; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.2); border-radius: 4px; }
         body.dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.2); }
@@ -298,7 +299,7 @@
 
         window.onload = () => { 
             // 🚀 CLOUDFLARE FETCH WAKEUP: Pings the external Render backend immediately
-            fetch('https://beast-ai-v2.onrender.com/api/chat').catch(() => {});
+            fetch('https://beast-ai-v2.onrender.com/api/health').catch(() => {});
             if(localStorage.getItem('beast-theme') === 'dark') document.body.classList.add('dark'); else if (localStorage.getItem('beast-theme') === 'light') document.body.classList.remove('dark');
             const isDark = document.body.classList.contains('dark');
             document.getElementById('theme-icon-desktop').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-desktop').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
@@ -379,7 +380,9 @@
             try {
                 // 🚀 CLOUDFLARE FETCH: Hard-pointed directly to Render server
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
-                const data = await res.json();
+                const raw = await res.text();
+                let data;
+                try { data = JSON.parse(raw); } catch (_) { data = { reply: `**Server problem (HTTP ${res.status}).** The backend did not return valid JSON: ${raw.replace(/<[^>]*>/g, ' ').trim().slice(0, 200)}` }; }
                 const loader = document.getElementById(`loader-${msgId}`); 
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
                 const targetBox = targetBoxWrap.querySelector('.prose');
@@ -397,7 +400,7 @@
                 document.getElementById(`loader-${msgId}`).style.display = 'none'; 
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
                 targetBoxWrap.classList.remove('hidden'); 
-                targetBoxWrap.querySelector('.prose').innerHTML = marked.parse("The connection was severed! ⚡😵"); 
+                targetBoxWrap.querySelector('.prose').innerHTML = marked.parse("The connection was severed! ⚡😵 (" + e.message + ") If you are on Render's free plan the server may be waking up. Wait about 50 seconds and try again."); 
             }
             lucide.createIcons(); 
             document.getElementById('send-btn').disabled = false; 
