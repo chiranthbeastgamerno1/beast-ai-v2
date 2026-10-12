@@ -118,6 +118,55 @@ def configured_gemini_keys() -> list[str]:
     ]
 
 
+
+def _chat_history(raw: Any) -> list[dict[str, str]]:
+    """Parse frontend chat history into normalized provider messages.
+
+    The current frontend sends [{type: "user"|"beast", message: "..."}],
+    while some clients send [{role: "user"|"assistant", text: "..."}].
+    Accept both formats and ignore malformed entries safely.
+    """
+    if isinstance(raw, str):
+        try:
+            items = json.loads(raw)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return []
+    else:
+        items = raw
+
+    if not isinstance(items, list):
+        return []
+
+    normalized: list[dict[str, str]] = []
+    for item in items[-100:]:
+        if not isinstance(item, dict):
+            continue
+
+        raw_role = item.get("role") or item.get("type") or "user"
+        role_value = str(raw_role).strip().lower()
+        if role_value in {"user", "human"}:
+            role = "user"
+        elif role_value in {"assistant", "model", "beast", "beast ai", "ai"}:
+            role = "assistant"
+        else:
+            continue
+
+        raw_text = item.get("text")
+        if not isinstance(raw_text, str) or not raw_text.strip():
+            raw_text = item.get("message")
+        if not isinstance(raw_text, str):
+            raw_text = item.get("content")
+        if not isinstance(raw_text, str):
+            continue
+
+        text = raw_text.strip()
+        if not text:
+            continue
+        normalized.append({"role": role, "text": text[:16000]})
+
+    # Keep a bounded recent window so repeated chats cannot grow request payloads forever.
+    return normalized[-40:]
+
 def _json_request_body() -> dict[str, Any]:
     if request.is_json:
         body = request.get_json(silent=True)
