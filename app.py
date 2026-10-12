@@ -7,6 +7,7 @@ API keys are read only from environment variables. Never commit secret values.
 import json
 import os
 import random
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -49,6 +50,64 @@ USER_AGENT = (
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_REQUEST_BYTES
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+
+# Beast AI's creator identity and emoji policy are enforced server-side so they
+# apply regardless of which configured text model handles a request.
+CREATOR_REPLY = (
+    "Beast AI was created by Chiranth when he was in 8th grade! 🚀 "
+    "The app uses AI models from external providers to power its responses."
+)
+
+_EMOJI_PATTERN = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]")
+_CREATOR_QUESTION_PATTERNS = tuple(re.compile(pattern, re.IGNORECASE) for pattern in (
+    r"\bwho\s+(?:actually\s+)?(?:made|created|built|developed|designed|invented)\s+(?:you|u|beast(?:\s*ai)?|this\s+ai)\b",
+    r"\bwho\s+(?:is|'s)\s+your\s+(?:creator|maker|developer|founder|builder|author|owner)\b",
+    r"\b(?:your|beast\s*ai(?:'s)?)\s+(?:creator|maker|developer|founder|builder|author|owner)\b",
+    r"\bwho\s+(?:created|built|developed|founded|owns)\s+(?:the\s+)?beast\s*ai\b",
+    r"\bwho\s+(?:is|are)\s+behind\s+(?:you|beast(?:\s*ai)?)\b",
+    r"\b(?:were|are)\s+you\s+(?:made|created|built|developed)\s+by\s+(?:whom|who)\b",
+    r"\bdid\s+chiranth\s+(?:make|create|build|develop)\s+(?:you|beast(?:\s*ai)?)\b",
+    r"\bwho\s+is\s+the\s+creator\s+of\s+(?:you|beast(?:\s*ai)?)\b",
+))
+
+
+def _is_creator_question(message: str) -> bool:
+    """Recognize common ways users ask who created or built Beast AI."""
+    normalized = re.sub(r"\s+", " ", message).strip()
+    return any(pattern.search(normalized) for pattern in _CREATOR_QUESTION_PATTERNS)
+
+
+def _ensure_reply_emoji(text: str) -> str:
+    """Guarantee at least one emoji in a user-facing text reply."""
+    cleaned = text.rstrip()
+    if not cleaned:
+        return "🙂"
+    if _EMOJI_PATTERN.search(cleaned):
+        return cleaned
+    return f"{cleaned} 🙂"
+
+
+@app.after_request
+def _enforce_emoji_on_text_replies(response):
+    """Safety net for generated answers and text errors; preserve media URLs."""
+    if not response.is_json:
+        return response
+    payload = response.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return response
+    reply = payload.get("reply")
+    if not isinstance(reply, str) or not reply.strip():
+        return response
+    # The frontend detects a raw URL to render generated images/videos.
+    if re.fullmatch(r"https?://\S+", reply.strip()):
+        return response
+    updated = _ensure_reply_emoji(reply)
+    if updated != reply:
+        payload["reply"] = updated
+        response.set_data(app.json.dumps(payload))
+        response.headers["Content-Type"] = "application/json"
+    return response
 
 
 def configured_gemini_keys() -> list[str]:
@@ -353,6 +412,10 @@ def chat():
         if not message and not uploaded_files:
             return jsonify({"reply": "Type a message or attach a file first."}), 200
 
+        # Answer creator questions deterministically rather than relying on a provider prompt.
+        if mode == "chat" and not uploaded_files and message and _is_creator_question(message):
+            return jsonify({"reply": CREATOR_REPLY, "provider": "Beast AI"}), 200
+
         if mode == "image":
             if not message:
                 return jsonify({"reply": "Describe the image you want to generate."}), 200
@@ -366,6 +429,11 @@ def chat():
         live_time = datetime.now(ist).strftime("%A, %d %B %Y, %I:%M %p IST")
         system_prompt = (
             "You are Beast AI, a friendly, useful, witty assistant. Be clear and direct.\n"
+            "Creator identity: Beast AI was created by Chiranth when he was in 8th grade. "
+            "If asked who created, made, built, developed, founded, or owns Beast AI, answer that clearly. "
+            "Be transparent that the underlying AI models are provided by external services; do not claim Chiranth personally trained those models.\n"
+            "Emoji rule: Every user-facing text reply must include at least one relevant emoji. "
+            "If your draft has none, add one naturally at the end. Do not overuse emojis.\n"
             f"Current local time: {live_time}.\n"
             "Use Markdown for structure when it helps. Do not claim you generated media unless the API confirms it."
         )
