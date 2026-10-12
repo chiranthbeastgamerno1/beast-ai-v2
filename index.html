@@ -293,6 +293,26 @@
             return result;
         }
 
+        async function waitForMediaJob(initialData, mode, chatApiUrl) {
+            // Queue requests return quickly; poll the backend status route while the UI
+            // keeps its animated loading indicator visible. The fal key stays server-side.
+            for (let attempt = 0; attempt < 120; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 2500));
+                const statusUrl = new URL('/api/media/status', chatApiUrl).href;
+                const statusResponse = await fetch(statusUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ request_id: initialData.request_id, mode })
+                });
+                const statusData = await statusResponse.json().catch(() => ({}));
+                if (!statusResponse.ok && !statusData.reply) {
+                    return { reply: `Media status check failed (HTTP ${statusResponse.status}). Please try again. ⚠️`, error: true };
+                }
+                if (!statusData.media_pending) return statusData;
+            }
+            return { reply: 'This generation is taking longer than expected. The provider job may still be running; please try again shortly. ⏳', error: true };
+        }
+
         function renderMarkdown(text) {
             const html = marked.parse(processMedia(text || ""));
             if (window.DOMPurify) {
@@ -323,9 +343,9 @@
 
         function setGenMode(type) {
             currentMode = type; const input = document.getElementById('user-input');
-            if (type === 'image') input.placeholder = 'Kira 3.0 Image: Describe image...';
-            else if (type === 'video') input.placeholder = 'Kira 3.0 Video: Describe video...';
-            else if (type === 'video-fast') input.placeholder = 'Kira 3.0 Video Flash: Describe video...';
+            if (type === 'image') input.placeholder = 'Describe an image to create...';
+            else if (type === 'video') input.placeholder = 'Describe a video to generate (Kling)...';
+            else if (type === 'video-fast') input.placeholder = 'Describe a quick video to generate (LTX Fast)...';
             else input.placeholder = 'Ask Beast...';
             input.focus();
         }
@@ -430,7 +450,7 @@
         }
 
         async function sendMessage() {
-            const input = document.getElementById('user-input'); const msg = input.value.trim();
+            const input = document.getElementById('user-input'); const msg = input.value.trim(); const requestMode = currentMode;
             if (!msg && attachedFiles.length === 0) return;
             
             input.value = ''; checkInput();
@@ -469,7 +489,7 @@
 
             const formData = new FormData(); 
             formData.append('message', msg); 
-            formData.append('mode', currentMode); 
+            formData.append('mode', requestMode); 
             formData.append('speed', currentSpeed);
             
             let session = JSON.parse(localStorage.getItem(currentSessionId)) || { pinned: false, messages: [] }; 
@@ -482,7 +502,8 @@
                 clearAllAttachments();
                 // 🚀 CLOUDFLARE FETCH DIRECTED TO RENDER
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
-                const data = await res.json().catch(() => ({}));
+                let data = await res.json().catch(() => ({}));
+                if (data.media_pending) data = await waitForMediaJob(data, requestMode, res.url);
                 if (!res.ok && !data.reply) {
                     data.reply = `Request failed (HTTP ${res.status}). Reduce attachment size or check the Render service logs.`;
                     data.error = true;
@@ -490,7 +511,7 @@
                 const loader = document.getElementById(`loader-${msgId}`); 
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
                 const targetBox = targetBoxWrap.querySelector('.prose');
-                let replyText = responseToDisplayText(data, currentMode) || "The backend returned an empty response.";
+                let replyText = responseToDisplayText(data, requestMode) || "The backend returned an empty response.";
                 
                 loader.style.display = 'none'; 
                 targetBoxWrap.classList.remove('hidden'); 
@@ -502,7 +523,7 @@
                 targetBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800'));
                 
                 lucide.createIcons(); 
-                session.messages.push({type:'user', message:msg, files: currentFilesSnapshot}, {type:'beast', message:replyText, mode: currentMode}); 
+                session.messages.push({type:'user', message:msg, files: currentFilesSnapshot}, {type:'beast', message:replyText, mode: requestMode}); 
                 localStorage.setItem(currentSessionId, JSON.stringify(session));
             } catch(e) { 
                 document.getElementById(`loader-${msgId}`).style.display = 'none'; 
