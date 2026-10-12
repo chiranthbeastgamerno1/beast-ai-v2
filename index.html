@@ -21,6 +21,7 @@
     </script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
     
     <style>
         @import url('https://fonts.cdnfonts.com/css/metropolis-2');
@@ -222,12 +223,17 @@
                             <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
                             <button onclick="setSpeed('normal')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="normal">
                                 <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-100 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
-                                <div><div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Normal</div><div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">gemini 3.5 flash</div></div>
+                                <div><div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Normal</div><div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Gemini 3.5 Flash Lite</div></div>
                             </button>
                             <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
                             <button onclick="setSpeed('pro')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="pro">
                                 <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
                                 <div><div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">PRO</div><div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Grok 4.6</div></div>
+                            </button>
+                            <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
+                            <button onclick="setSpeed('kira-pro')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="kira-pro">
+                                <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
+                                <div><div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Kira Pro</div><div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">kira-3.5-pro</div></div>
                             </button>
                         </div>
                     </div>
@@ -243,9 +249,49 @@
         let currentMode = 'chat'; let currentSpeed = 'normal'; let attachedFiles = []; let currentSessionId = null;
         let userName = localStorage.getItem('beast-username'); let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
 
+        function escapeHTML(value) {
+            return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[ch]));
+        }
+
+        function safeMediaURL(value) {
+            try {
+                const url = new URL(String(value || ""));
+                return (url.protocol === "https:" || url.protocol === "http:") ? url.href : "";
+            } catch (_) { return ""; }
+        }
+
         function processMedia(text) {
             if (!text) return "";
-            return text.replace(/(?:!\[.*?\]\()?(https?:\/\/[^\s)]+\.mp4)(?:\))?/gi, '\n\n<video src="$1" controls autoplay loop playsinline class="w-full rounded-xl shadow-md my-3 border border-black/5 dark:border-white/10"></video>\n\n');
+            // Raw video URLs are made playable when the provider supplies a direct media file URL.
+            return String(text).replace(/https?:\/\/[^\s<>"']+\.(?:mp4|webm|mov)(?:\?[^\s<>"']*)?(?:#[^\s<>"']*)?/gi, url =>
+                `<video src="${escapeHTML(url)}" controls playsinline preload="metadata" class="w-full rounded-xl shadow-md my-3 border border-black/5 dark:border-white/10"></video>`
+            );
+        }
+
+        function responseToDisplayText(data, mode) {
+            const directURL = safeMediaURL(data && data.media_url);
+            let result = (data && typeof data.reply === "string") ? data.reply : "The backend returned an empty response.";
+            if (directURL && data.media_type === "image") {
+                result = `![Generated image](<${directURL}>)`;
+                if (data.note) result += `\n\n${data.note}`;
+            } else if (directURL && data.media_type === "video") {
+                result = `<video src="${escapeHTML(directURL)}" controls playsinline preload="metadata" class="w-full rounded-xl shadow-md my-3 border border-black/5 dark:border-white/10"></video>\n\n[Open generated video in a new tab](${directURL})`;
+            } else if (data && data.notice) {
+                result += `\n\n${data.notice}`;
+            }
+            return result;
+        }
+
+        function renderMarkdown(text) {
+            const html = marked.parse(processMedia(text || ""));
+            if (window.DOMPurify) {
+                return window.DOMPurify.sanitize(html, {
+                    ADD_TAGS: ["video", "source"],
+                    ADD_ATTR: ["controls", "playsinline", "preload", "autoplay", "loop"]
+                });
+            }
+            // Safe fallback if the sanitizer CDN is unavailable: render plain text, not raw HTML.
+            return `<p>${escapeHTML(String(text || "" )).replace(/\n/g, "<br>")}</p>`;
         }
 
         function checkInput() {
@@ -309,7 +355,7 @@
         }
 
         function setSpeed(s) {
-            currentSpeed = s; const labels = { 'fast': 'Fast', 'normal': 'Normal', 'pro': 'PRO' };
+            currentSpeed = s; const labels = { 'fast': 'Fast', 'normal': 'Normal', 'pro': 'PRO', 'kira-pro': 'Kira Pro' };
             document.getElementById('current-speed-label').innerText = labels[s];
             document.querySelectorAll('.speed-option').forEach(btn => {
                 if(btn.dataset.speed === s) { btn.querySelector('.check-icon').classList.remove('opacity-0'); btn.querySelector('.check-icon').classList.add('opacity-100'); } 
@@ -340,14 +386,37 @@
         function toggleMobileSidebar() { const sb = document.getElementById('mobile-sidebar'); const overlay = document.getElementById('mobile-overlay'); sb.classList.toggle('-translate-x-full'); overlay.classList.toggle('hidden'); }
         function handleEnter(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
         
-        function loadHistory() { const keys = Object.keys(localStorage).filter(k => k.startsWith('BeastSession_')).sort().reverse(); const mobileList = document.getElementById('history-list-mobile'); const desktopList = document.getElementById('history-list-desktop'); mobileList.innerHTML = ''; desktopList.innerHTML = ''; keys.forEach(id => { const session = JSON.parse(localStorage.getItem(id)); const preview = session.title || session.messages?.[0]?.message || "Manifestation"; const isCurrent = id === currentSessionId; const html = `<div class="sidebar-btn group p-0 hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap overflow-hidden ${isCurrent ? 'bg-black/5 dark:bg-white/10' : ''}"><div class="flex items-center flex-1 overflow-hidden h-full w-full" onclick="loadSession('${id}')"><div class="sidebar-icon text-zinc-500 flex-shrink-0"><i data-lucide="message-square" class="w-4 h-4"></i></div><div class="text-sm truncate nav-text text-zinc-900 dark:text-white font-semibold flex-1 text-left ml-1">${preview}</div></div><div class="flex items-center flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity pr-3 z-10 gap-1 nav-text"><button onclick="renameSession('${id}', event)" class="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button><button onclick="togglePin('${id}', event)" class="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="pin" class="w-3.5 h-3.5 ${session.pinned ? 'fill-current text-zinc-900 dark:text-white lg:opacity-100' : ''}"></i></button></div></div>`; mobileList.insertAdjacentHTML('beforeend', html); desktopList.insertAdjacentHTML('beforeend', html); }); lucide.createIcons(); }
+        function loadHistory() { const keys = Object.keys(localStorage).filter(k => k.startsWith('BeastSession_')).sort().reverse(); const mobileList = document.getElementById('history-list-mobile'); const desktopList = document.getElementById('history-list-desktop'); mobileList.innerHTML = ''; desktopList.innerHTML = ''; keys.forEach(id => { const session = JSON.parse(localStorage.getItem(id)); const preview = session.title || session.messages?.[0]?.message || "Manifestation"; const isCurrent = id === currentSessionId; const html = `<div class="sidebar-btn group p-0 hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap overflow-hidden ${isCurrent ? 'bg-black/5 dark:bg-white/10' : ''}"><div class="flex items-center flex-1 overflow-hidden h-full w-full" onclick="loadSession('${id}')"><div class="sidebar-icon text-zinc-500 flex-shrink-0"><i data-lucide="message-square" class="w-4 h-4"></i></div><div class="text-sm truncate nav-text text-zinc-900 dark:text-white font-semibold flex-1 text-left ml-1">${escapeHTML(preview)}</div></div><div class="flex items-center flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity pr-3 z-10 gap-1 nav-text"><button onclick="renameSession('${id}', event)" class="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button><button onclick="togglePin('${id}', event)" class="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="pin" class="w-3.5 h-3.5 ${session.pinned ? 'fill-current text-zinc-900 dark:text-white lg:opacity-100' : ''}"></i></button></div></div>`; mobileList.insertAdjacentHTML('beforeend', html); desktopList.insertAdjacentHTML('beforeend', html); }); lucide.createIcons(); }
         function renameSession(id, e) { e.stopPropagation(); const session = JSON.parse(localStorage.getItem(id)); const currentName = session.title || session.messages?.[0]?.message || "Manifestation"; const newName = prompt("Rename this chat:", currentName); if (newName !== null && newName.trim() !== "") { session.title = newName.trim(); localStorage.setItem(id, JSON.stringify(session)); loadHistory(); } }
         function clearUnpinned() { if(!confirm("Clear all history?")) return; const keys = Object.keys(localStorage).filter(k => k.startsWith('BeastSession_')); keys.forEach(id => { const s = JSON.parse(localStorage.getItem(id)); if(!s.pinned) localStorage.removeItem(id); }); startNewChat(); loadHistory(); }
         function togglePin(id, e) { e.stopPropagation(); const s = JSON.parse(localStorage.getItem(id)); s.pinned = !s.pinned; localStorage.setItem(id, JSON.stringify(s)); loadHistory(); }
         function loadSession(id) { currentSessionId = id; const session = JSON.parse(localStorage.getItem(id)); document.getElementById('welcome-box').style.display = 'none'; const chatBox = document.getElementById('chat-box'); chatBox.innerHTML = ''; chatBox.classList.replace('hidden', 'flex'); session.messages.forEach(m => appendHistoryMessage(m)); if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); } loadHistory(); }
         function startNewChat() { currentSessionId = null; document.getElementById('chat-box').innerHTML = ''; document.getElementById('chat-box').classList.replace('flex', 'hidden'); document.getElementById('welcome-box').style.display = 'flex'; if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); } }
 
-        async function compressImage(file, maxWidth = 600) { if (file.type === 'application/pdf' || !file.type.startsWith('image/')) return file; return new Promise((resolve) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const scale = Math.min(maxWidth / img.width, 1); canvas.width = img.width * scale; canvas.height = img.height * scale; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); canvas.toBlob((blob) => { resolve(new File([blob], file.name, { type: 'image/jpeg' })); }, 'image/jpeg', 0.4); }; img.src = URL.createObjectURL(file); }); }
+        async function compressImage(file, maxWidth = 1024) {
+            if (file.type === 'application/pdf' || !file.type.startsWith('image/')) return file;
+            return new Promise((resolve) => {
+                const objectURL = URL.createObjectURL(file);
+                const img = new Image();
+                img.onerror = () => { URL.revokeObjectURL(objectURL); resolve(file); };
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const scale = Math.min(maxWidth / img.width, 1);
+                        canvas.width = Math.max(1, Math.round(img.width * scale));
+                        canvas.height = Math.max(1, Math.round(img.height * scale));
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) { URL.revokeObjectURL(objectURL); resolve(file); return; }
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob((blob) => {
+                            URL.revokeObjectURL(objectURL);
+                            resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }) : file);
+                        }, 'image/jpeg', 0.68);
+                    } catch (_) { URL.revokeObjectURL(objectURL); resolve(file); }
+                };
+                img.src = objectURL;
+            });
+        }
 
         async function sendMessage() {
             const input = document.getElementById('user-input'); const msg = input.value.trim();
@@ -369,12 +438,12 @@
             if (currentFilesSnapshot.length > 0) { 
                 userHtml += `<div class="flex flex-wrap gap-2 justify-end mb-2">`; 
                 currentFilesSnapshot.forEach(f => { 
-                    if (f.isPdf) { userHtml += `<div class="px-3 py-2 bg-red-900/80 rounded border border-red-500 text-xs font-bold flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> ${f.name}</div>`; } 
+                    if (f.isPdf) { userHtml += `<div class="px-3 py-2 bg-red-900/80 rounded border border-red-500 text-xs font-bold flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> ${escapeHTML(f.name)}</div>`; } 
                     else { userHtml += `<img src="${f.preview}" class="max-h-32 rounded-xl object-cover shadow-sm">`; } 
                 }); 
                 userHtml += `</div>`; 
             }
-            if (msg) userHtml += `<span class="font-medium">${msg}</span>`; 
+            if (msg) userHtml += `<span class="font-medium">${escapeHTML(msg)}</span>`; 
             userHtml += `</div></div>`; 
             chatBox.insertAdjacentHTML('beforeend', userHtml);
             
@@ -395,21 +464,26 @@
             let session = JSON.parse(localStorage.getItem(currentSessionId)) || { pinned: false, messages: [] }; 
             let chatHistory = session.messages.slice(-100).map(m => ({ type: m.type, message: m.message || "" })); 
             formData.append('history', JSON.stringify(chatHistory));
-            for (let i = 0; i < attachedFiles.length; i++) { formData.append('files', await compressImage(attachedFiles[i].file)); } 
-            clearAllAttachments();
-
             try {
+                for (let i = 0; i < attachedFiles.length; i++) {
+                    formData.append('files', await compressImage(attachedFiles[i].file));
+                }
+                clearAllAttachments();
                 // 🚀 CLOUDFLARE FETCH DIRECTED TO RENDER
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok && !data.reply) {
+                    data.reply = `Request failed (HTTP ${res.status}). Reduce attachment size or check the Render service logs.`;
+                    data.error = true;
+                }
                 const loader = document.getElementById(`loader-${msgId}`); 
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
                 const targetBox = targetBoxWrap.querySelector('.prose');
-                let replyText = data.reply || "Connection severed.";
+                let replyText = responseToDisplayText(data, currentMode) || "The backend returned an empty response.";
                 
                 loader.style.display = 'none'; 
                 targetBoxWrap.classList.remove('hidden'); 
-                targetBox.innerHTML = marked.parse(processMedia(replyText)); 
+                targetBox.innerHTML = renderMarkdown(replyText); 
                 
                 // 🚀 FIXED: Added beautiful blur text-reveal animation upon load
                 targetBox.classList.add('text-reveal');
@@ -423,7 +497,7 @@
                 document.getElementById(`loader-${msgId}`).style.display = 'none'; 
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
                 targetBoxWrap.classList.remove('hidden'); 
-                targetBoxWrap.querySelector('.prose').innerHTML = marked.parse("The connection was severed! ⚡😵"); 
+                targetBoxWrap.querySelector('.prose').innerHTML = renderMarkdown(`Connection error: ${e && e.message ? e.message : "request failed"}. Check /api/health and the deployment logs.`); 
             }
             lucide.createIcons(); 
             document.getElementById('send-btn').disabled = false; 
@@ -439,15 +513,15 @@
                 if (m.files && m.files.length > 0) { 
                     inner += `<div class="flex flex-wrap gap-2 justify-end mb-2">`; 
                     m.files.forEach(f => { 
-                        if (f.isPdf) { inner += `<div class="px-3 py-2 bg-red-900/80 rounded border border-red-500 text-xs font-bold flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> ${f.name}</div>`; } 
+                        if (f.isPdf) { inner += `<div class="px-3 py-2 bg-red-900/80 rounded border border-red-500 text-xs font-bold flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> ${escapeHTML(f.name)}</div>`; } 
                         else { inner += `<img src="${f.preview}" class="max-h-32 rounded-xl object-cover shadow-sm">`; } 
                     }); 
                     inner += `</div>`; 
                 } 
-                if (m.message) inner += `<span class="font-medium">${m.message}</span>`; 
+                if (m.message) inner += `<span class="font-medium">${escapeHTML(m.message)}</span>`; 
                 chatBox.insertAdjacentHTML('beforeend', inner + `</div></div>`); 
             } else { 
-                let contentHtml = marked.parse(processMedia(m.message)); 
+                let contentHtml = renderMarkdown(m.message); 
                 const html = `<div class="flex flex-col items-start w-full max-w-[90%] mb-6"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div><div class="pl-[2.7rem] sm:pl-[3.2rem] w-full"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100">${contentHtml}</div></div></div>`; 
                 chatBox.insertAdjacentHTML('beforeend', html); 
                 chatBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800')); 
