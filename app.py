@@ -41,6 +41,13 @@ GROK_MODEL = os.environ.get("GROK_MODEL", "grok-4.6").strip()
 KIRA_FLASH_MODEL = os.environ.get("KIRA_FLASH_MODEL", "kira-3.5-flash").strip()
 KIRA_PRO_MODEL = os.environ.get("KIRA_PRO_MODEL", "kira-3.5-pro").strip()
 
+GEMINI_LIVE_MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.8-live").strip() or "gemini-3.8-live"
+LIVE_SYSTEM_INSTRUCTION = (
+    "You are Beast AI, a friendly, helpful real-time voice assistant. "
+    "Beast AI was created by Chiranth when he was in 8th grade. If asked who created you, answer simply and accurately. "
+    "Speak naturally, keep answers concise, allow the user to interrupt, and never claim to have performed an action you did not perform."
+)
+
 # Images use Cloudflare Workers AI (FLUX.1 Schnell) so image generation can
 # use Cloudflare's free daily allocation instead of fal.ai credits.
 CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -554,6 +561,41 @@ def _generate_with_gemini(keys: list[str], message: str, history: list[dict[str,
     return None, errors
 
 
+@app.route("/api/live/token", methods=["POST"])
+def create_gemini_live_token():
+    """Create a short-lived, single-use Gemini Live token for the browser."""
+    if not GENAI_AVAILABLE or genai is None:
+        return jsonify({"error": "The google-genai package is not installed. Check deployment build logs."}), 503
+    keys = configured_gemini_keys()
+    if not keys:
+        return jsonify({"error": "Gemini Live needs GEMINI_API_KEY (or GEMINI_API_KEY_1 through _9) configured on the server."}), 503
+    try:
+        now = datetime.now(timezone.utc)
+        client = genai.Client(api_key=keys[0])
+        token = client.auth_tokens.create(config={
+            "uses": 1,
+            "expire_time": now + timedelta(minutes=30),
+            "new_session_expire_time": now + timedelta(minutes=1),
+            "live_connect_constraints": {
+                "model": GEMINI_LIVE_MODEL,
+                "config": {
+                    "response_modalities": ["AUDIO"],
+                    "input_audio_transcription": {},
+                    "output_audio_transcription": {},
+                    "system_instruction": {"parts": [{"text": LIVE_SYSTEM_INSTRUCTION}]},
+                },
+            },
+        })
+        token_value = getattr(token, "name", None)
+        if not token_value:
+            raise RuntimeError("Gemini did not return an ephemeral token.")
+        return jsonify({"token": token_value, "model": GEMINI_LIVE_MODEL}), 200
+    except Exception as exc:
+        app.logger.exception("Gemini Live token creation failed")
+        detail = str(exc).strip() or exc.__class__.__name__
+        return jsonify({"error": "Could not create a Gemini Live session token: " + detail[:900]}), 502
+
+
 @app.route("/", methods=["GET"])
 def home():
     return "Beast AI Core is online. Use /api/health for status."
@@ -569,6 +611,7 @@ def health_check():
         "gemini_keys_configured": len(keys),
         "models": {
             "gemini": GEMINI_MODEL,
+            "gemini_live": GEMINI_LIVE_MODEL,
             "grok": GROK_MODEL,
             "kira_fast": KIRA_FLASH_MODEL,
             "kira_pro": KIRA_PRO_MODEL,
@@ -578,6 +621,7 @@ def health_check():
         },
         "features": {
             "chat": True,
+            "live_voice": GENAI_AVAILABLE and bool(keys),
             "attachments": GENAI_AVAILABLE and bool(keys),
             "image_generation": bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN),
             "video_generation": bool(FAL_KEY and ENABLE_FAL_VIDEO),
