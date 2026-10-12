@@ -40,7 +40,7 @@ KIRA_FLASH_MODEL = os.environ.get("KIRA_FLASH_MODEL", "kira-3.5-flash").strip()
 KIRA_PRO_MODEL = os.environ.get("KIRA_PRO_MODEL", "kira-3.5-pro").strip()
 
 # Media generation uses fal.ai rather than Kira's incompatible/unverified media routes.
-FAL_KEY = os.environ.get("FAL_KEY", "").strip()
+FAL_KEY = (os.environ.get("FAL_API_KEY", "").strip() or os.environ.get("FAL_KEY", "").strip())
 FAL_IMAGE_MODEL = os.environ.get("FAL_IMAGE_MODEL", "fal-ai/nano-banana-2").strip()
 FAL_VIDEO_MODEL = os.environ.get("FAL_VIDEO_MODEL", "fal-ai/kling-video/v3/standard/text-to-video").strip()
 FAL_VIDEO_FAST_MODEL = os.environ.get("FAL_VIDEO_FAST_MODEL", "fal-ai/ltx-2.3/text-to-video/fast").strip()
@@ -199,7 +199,7 @@ def _media_response(media_type: str, url: str, provider: str, note: str = ""):
 def _fal_http_json(url: str, method: str = "GET", payload: dict[str, Any] | None = None, timeout: int = 20) -> dict[str, Any]:
     """Call fal.ai's authenticated queue API from the server, never from browser code."""
     if not FAL_KEY:
-        raise RuntimeError("FAL_KEY is not configured in the hosting environment.")
+        raise RuntimeError("FAL_API_KEY (or legacy FAL_KEY) is not configured in the hosting environment.")
     body = json.dumps(payload).encode("utf-8") if payload is not None else None
     req = urllib.request.Request(
         url,
@@ -248,7 +248,7 @@ def _fal_config_for_mode(mode: str) -> tuple[str, str, dict[str, Any]]:
 def _start_fal_media_job(message: str, mode: str):
     if not FAL_KEY:
         return jsonify({
-            "reply": "Image and video generation need a fal.ai API key. Add FAL_KEY in the hosting environment, then redeploy. 🔑",
+            "reply": "Image and video generation need a fal.ai API key. Add FAL_API_KEY in the hosting environment, then redeploy. 🔑",
             "error": True,
         }), 200
     try:
@@ -275,7 +275,7 @@ def _start_fal_media_job(message: str, mode: str):
 
 def _poll_fal_media_job(mode: str, request_id: str):
     if not FAL_KEY:
-        return jsonify({"reply": "FAL_KEY is missing from the hosting environment. 🔑", "error": True}), 200
+        return jsonify({"reply": "FAL_API_KEY is missing from the hosting environment. 🔑", "error": True}), 200
     if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,160}", request_id):
         return jsonify({"reply": "The media job ID is invalid. Please start a new generation. ⚠️", "error": True}), 400
     if mode not in {"image", "video", "video-fast"}:
