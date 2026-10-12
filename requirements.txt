@@ -1,4 +1,4 @@
-flask
-flask-cors
-google-genai
-gunicorn
+Flask>=3.0,<4
+flask-cors>=4.0,<6
+google-genai>=1.0,<2
+gunicorn>=22,<24
