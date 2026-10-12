@@ -4,6 +4,8 @@ os.environ["BEAST_DEPLOYMENT_TARGET"] = "render"
 
 API keys are read only from environment variables. Never commit secret values.
 """
+import base64
+import html
 import json
 import os
 import random
@@ -39,11 +41,22 @@ GROK_MODEL = os.environ.get("GROK_MODEL", "grok-4.6").strip()
 KIRA_FLASH_MODEL = os.environ.get("KIRA_FLASH_MODEL", "kira-3.5-flash").strip()
 KIRA_PRO_MODEL = os.environ.get("KIRA_PRO_MODEL", "kira-3.5-pro").strip()
 
-# Media generation uses fal.ai rather than Kira's incompatible/unverified media routes.
+# Images use Cloudflare Workers AI (FLUX.1 Schnell) so image generation can
+# use Cloudflare's free daily allocation instead of fal.ai credits.
+CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+CLOUDFLARE_API_TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+CLOUDFLARE_IMAGE_MODEL = os.environ.get(
+    "CLOUDFLARE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell"
+).strip()
+
+# fal.ai is retained for optional video generation only. Leave ENABLE_FAL_VIDEO
+# unset for the free image-only configuration; set it to true only if video
+# billing/credits are available in your fal.ai account.
 FAL_KEY = (os.environ.get("FAL_API_KEY", "").strip() or os.environ.get("FAL_KEY", "").strip())
 FAL_IMAGE_MODEL = os.environ.get("FAL_IMAGE_MODEL", "fal-ai/nano-banana-2").strip()
 FAL_VIDEO_MODEL = os.environ.get("FAL_VIDEO_MODEL", "fal-ai/kling-video/v3/standard/text-to-video").strip()
 FAL_VIDEO_FAST_MODEL = os.environ.get("FAL_VIDEO_FAST_MODEL", "fal-ai/ltx-2.3/text-to-video/fast").strip()
+ENABLE_FAL_VIDEO = os.environ.get("ENABLE_FAL_VIDEO", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -245,6 +258,130 @@ def _media_response(media_type: str, url: str, provider: str, note: str = ""):
     }), 200
 
 
+def _cloudflare_image_bytes(prompt: str) -> tuple[bytes, str]:
+    """Generate an image with Cloudflare Workers AI and return (bytes, MIME type)."""
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
+        raise RuntimeError(
+            "Image generation is not configured. Add CLOUDFLARE_ACCOUNT_ID and "
+            "CLOUDFLARE_API_TOKEN to your hosting environment, then redeploy. 🔑"
+        )
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", CLOUDFLARE_ACCOUNT_ID):
+        raise RuntimeError("CLOUDFLARE_ACCOUNT_ID does not look valid. Check the Cloudflare dashboard. ⚠️")
+    clean_prompt = prompt.strip()
+    if not clean_prompt:
+        raise ValueError("Describe the image you want to generate. 🎨")
+    if len(clean_prompt) > 2048:
+        clean_prompt = clean_prompt[:2048]
+
+    model_path = urllib.parse.quote(CLOUDFLARE_IMAGE_MODEL, safe="@/")
+    endpoint = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/{model_path}"
+    payload = {
+        "prompt": clean_prompt,
+        "steps": 4,
+        "seed": random.randint(1, 2_147_483_647),
+    }
+    req = urllib.request.Request(
+        endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}",
+            "Content-Type": "application/json",
+            "Accept": "image/jpeg, application/json",
+            "User-Agent": USER_AGENT,
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=45 if IS_VERCEL else 75) as response:
+        raw = response.read()
+        content_type = response.headers.get_content_type().lower()
+
+    if content_type.startswith("image/"):
+        return raw, content_type
+
+    # The Workers AI REST API commonly wraps its base64 image in result.image.
+    try:
+        data = json.loads(raw.decode("utf-8", errors="replace"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # Some compatible response paths may return raw image bytes with a generic MIME type.
+        if raw.startswith(b"\xff\xd8\xff"):
+            return raw, "image/jpeg"
+        if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+            return raw, "image/png"
+        raise RuntimeError(f"Cloudflare Workers AI returned an unrecognized response (Content-Type: {content_type}).")
+
+    if not isinstance(data, dict):
+        raise RuntimeError("Cloudflare Workers AI returned an unexpected response.")
+    if data.get("success") is False:
+        errors = data.get("errors") or []
+        detail = "; ".join(str(e.get("message", e)) if isinstance(e, dict) else str(e) for e in errors)
+        raise RuntimeError("Cloudflare Workers AI rejected the request: " + (detail[:700] or "unknown API error"))
+    result = data.get("result", data)
+    encoded = result.get("image") if isinstance(result, dict) else None
+    if not isinstance(encoded, str) or not encoded.strip():
+        raise RuntimeError("Cloudflare Workers AI response did not include an image.")
+    encoded = encoded.strip()
+    mime_type = "image/jpeg"
+    if encoded.startswith("data:") and "," in encoded:
+        data_header, encoded = encoded.split(",", 1)
+        if ";" in data_header:
+            mime_type = data_header[5:].split(";", 1)[0] or mime_type
+    try:
+        image_bytes = base64.b64decode(encoded, validate=False)
+    except Exception as exc:
+        raise RuntimeError("Cloudflare Workers AI returned invalid base64 image data.") from exc
+    if not image_bytes:
+        raise RuntimeError("Cloudflare Workers AI returned an empty image.")
+    return image_bytes, mime_type if mime_type.startswith("image/") else "image/jpeg"
+
+
+def _image_error_svg(message: str) -> bytes:
+    """Show a readable error inside the generated-image slot if the provider fails."""
+    safe = html.escape(message[:220])
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="190" viewBox="0 0 720 190">'
+        '<rect width="100%" height="100%" rx="16" fill="#f7f7f7" stroke="#d4d4d4"/>'
+        '<text x="24" y="48" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="#222">Image generation failed ⚠️</text>'
+        f'<foreignObject x="24" y="65" width="672" height="105"><div xmlns="http://www.w3.org/1999/xhtml" '
+        'style="font:15px Arial,sans-serif;color:#444;overflow-wrap:anywhere;">'
+        f'{safe}</div></foreignObject></svg>'
+    )
+    return svg.encode("utf-8")
+
+
+def _start_cloudflare_image(message: str):
+    """Return Markdown pointing at our backend image proxy; no frontend changes needed."""
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
+        return jsonify({
+            "reply": "Image generation needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in your hosting environment. Add both and redeploy. 🔑",
+            "error": True,
+        }), 200
+    # The browser requests this same-origin endpoint to receive the actual image bytes.
+    image_url = "/api/media/image?" + urllib.parse.urlencode({"prompt": message[:2048]})
+    return jsonify({
+        "reply": f"![Generated image](<{image_url}>)\n\n🎨",
+        "provider": "Cloudflare Workers AI · FLUX.1 Schnell",
+    }), 200
+
+
+@app.route("/api/media/image", methods=["GET"])
+def cloudflare_media_image():
+    """Proxy one generated image as bytes so the current frontend can render it without JS changes."""
+    prompt = request.args.get("prompt", "").strip()
+    if not prompt:
+        return app.response_class(_image_error_svg("The image prompt is missing."), status=400, mimetype="image/svg+xml")
+    try:
+        image_bytes, mime_type = _cloudflare_image_bytes(prompt)
+        response = app.response_class(image_bytes, status=200, mimetype=mime_type)
+        # Browser caching avoids regenerating the exact same prompt when the image is revisited.
+        response.headers["Cache-Control"] = "public, max-age=1800"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+    except Exception as exc:
+        app.logger.exception("Cloudflare Workers AI image generation failed")
+        message = _provider_error(exc, "Cloudflare Workers AI") if isinstance(exc, (urllib.error.HTTPError, urllib.error.URLError)) else str(exc)
+        return app.response_class(_image_error_svg(message), status=200, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
 def _fal_http_json(url: str, method: str = "GET", payload: dict[str, Any] | None = None, timeout: int = 20) -> dict[str, Any]:
     """Call fal.ai's authenticated queue API from the server, never from browser code."""
     if not FAL_KEY:
@@ -435,16 +572,16 @@ def health_check():
             "grok": GROK_MODEL,
             "kira_fast": KIRA_FLASH_MODEL,
             "kira_pro": KIRA_PRO_MODEL,
-            "fal_image": FAL_IMAGE_MODEL,
+            "cloudflare_image": CLOUDFLARE_IMAGE_MODEL,
             "fal_video": FAL_VIDEO_MODEL,
             "fal_video_fast": FAL_VIDEO_FAST_MODEL,
         },
         "features": {
             "chat": True,
             "attachments": GENAI_AVAILABLE and bool(keys),
-            "image_generation": bool(FAL_KEY),
-            "video_generation": bool(FAL_KEY),
-            "video_generation_fast": bool(FAL_KEY),
+            "image_generation": bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN),
+            "video_generation": bool(FAL_KEY and ENABLE_FAL_VIDEO),
+            "video_generation_fast": bool(FAL_KEY and ENABLE_FAL_VIDEO),
             "kira_pro_chat": bool(os.environ.get("KIRA_PRO_API_KEY")),
         },
     }), 200
@@ -499,11 +636,16 @@ def chat():
         if mode == "image":
             if not message:
                 return jsonify({"reply": "Describe the image you want to generate. 🎨"}), 200
-            return _start_fal_media_job(message, mode)
+            return _start_cloudflare_image(message)
         if mode in {"video", "video-fast"}:
             if not message:
                 return jsonify({"reply": "Describe the video you want to generate. 🎬"}), 200
-            return _start_fal_media_job(message, mode)
+            if ENABLE_FAL_VIDEO and FAL_KEY:
+                return _start_fal_media_job(message, mode)
+            return jsonify({
+                "reply": "Free Cloudflare Workers AI image generation is enabled, but this model does not generate videos. Video generation needs a separate video provider with available credits or a self-hosted video model. No paid video request was sent. 🎬",
+                "error": True,
+            }), 200
 
         ist = timezone(timedelta(hours=5, minutes=30))
         live_time = datetime.now(ist).strftime("%A, %d %B %Y, %I:%M %p IST")
