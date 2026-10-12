@@ -198,6 +198,10 @@
                         <i data-lucide="plus" id="plus-icon" class="w-5 h-5 transition-transform duration-300"></i>
                     </button>
                     <div id="attach-dropdown-menu" class="absolute bottom-[calc(100%+0.8rem)] left-0 w-[230px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden flex-col transform origin-bottom-left transition-all p-1.5">
+                        <button onclick="setGenMode('chat'); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
+                            <i data-lucide="message-circle" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
+                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Normal chat</span>
+                        </button>
                         <button onclick="document.getElementById('file-input').click(); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
                             <i data-lucide="upload" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
                             <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Upload file</span>
@@ -248,9 +252,29 @@
                             </button>
                         </div>
                     </div>
-                    <button id="mic-btn" onclick="toggleMic()" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0"><i data-lucide="mic" class="w-5 h-5"></i></button>
+                    <button id="mic-btn" onclick="toggleMic()" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0" title="Dictate a message"><i data-lucide="mic" class="w-5 h-5"></i></button>
+                    <button id="live-btn" onclick="startGeminiLive()" class="hidden h-9 sm:h-10 px-3 flex items-center justify-center gap-1.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-95 flex-shrink-0" title="Start a live voice conversation" aria-label="Start live voice conversation"><i data-lucide="audio-lines" class="w-4 h-4"></i><span class="text-[11px] sm:text-xs font-extrabold tracking-wider">LIVE</span></button>
                     <button id="send-btn" onclick="sendMessage()" class="hidden w-9 h-9 sm:w-10 sm:h-10 items-center justify-center bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm flex-shrink-0"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Gemini Live voice conversation overlay -->
+    <div id="live-overlay" class="hidden fixed inset-0 z-[100] bg-zinc-950/55 backdrop-blur-sm p-4 sm:p-6 items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="live-title">
+        <div class="w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden rounded-[2rem] bg-white dark:bg-[#1d1d20] text-zinc-900 dark:text-white shadow-2xl border border-black/10 dark:border-white/10">
+            <div class="flex items-center gap-3 px-5 py-4 sm:px-6 border-b border-black/5 dark:border-white/10">
+                <div class="w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center"><i data-lucide="audio-lines" class="w-5 h-5"></i></div>
+                <div class="flex-1 min-w-0"><h2 id="live-title" class="font-bold text-lg">Beast AI LIVE</h2><p id="live-status" class="text-sm text-zinc-500 dark:text-zinc-400">Preparing microphone…</p></div>
+                <span class="flex items-center gap-1.5 text-[10px] font-black tracking-widest text-red-600 bg-red-50 dark:bg-red-950/50 px-2.5 py-1.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> LIVE</span>
+            </div>
+            <div id="live-transcript" class="px-5 py-5 sm:px-6 flex-1 overflow-y-auto min-h-[180px] space-y-3 custom-scrollbar" aria-live="polite">
+                <p id="live-empty-state" class="text-center text-sm text-zinc-400 py-10">Start talking whenever you're ready. Beast AI will listen and reply aloud. 🎙️</p>
+            </div>
+            <div class="px-5 py-4 sm:px-6 border-t border-black/5 dark:border-white/10 flex items-center justify-between gap-4">
+                <p class="text-xs text-zinc-500 dark:text-zinc-400">Use headphones to reduce echo.</p>
+                <button id="live-end-btn" onclick="stopGeminiLive(false)" class="px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors"><i data-lucide="phone-off" class="w-4 h-4 inline-block mr-1.5"></i>End live</button>
             </div>
         </div>
     </div>
@@ -259,6 +283,11 @@
         lucide.createIcons();
         let currentMode = 'chat'; let currentSpeed = 'normal'; let attachedFiles = []; let currentSessionId = null;
         let userName = localStorage.getItem('beast-username'); let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
+        let freshChatLiveEligible = true;
+        let liveStarting = false, liveActive = false, liveHasConnected = false;
+        let liveSocket = null, liveStream = null, liveAudioContext = null, liveMicSource = null, liveProcessor = null, liveMutedOutput = null, liveSetupTimeout = null;
+        let liveNextPlayTime = 0, livePlayingSources = new Set(), liveTranscriptEntries = [], liveLastTranscriptEntry = null, liveLastTranscriptRole = null;
+        let liveCreatedSessionId = null;
 
         function escapeHTML(value) {
             return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[ch]));
@@ -293,26 +322,6 @@
             return result;
         }
 
-        async function waitForMediaJob(initialData, mode, chatApiUrl) {
-            // Queue requests return quickly; poll the backend status route while the UI
-            // keeps its animated loading indicator visible. The fal key stays server-side.
-            for (let attempt = 0; attempt < 120; attempt++) {
-                await new Promise(resolve => setTimeout(resolve, 2500));
-                const statusUrl = new URL('/api/media/status', chatApiUrl).href;
-                const statusResponse = await fetch(statusUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ request_id: initialData.request_id, mode })
-                });
-                const statusData = await statusResponse.json().catch(() => ({}));
-                if (!statusResponse.ok && !statusData.reply) {
-                    return { reply: `Media status check failed (HTTP ${statusResponse.status}). Please try again. ⚠️`, error: true };
-                }
-                if (!statusData.media_pending) return statusData;
-            }
-            return { reply: 'This generation is taking longer than expected. The provider job may still be running; please try again shortly. ⏳', error: true };
-        }
-
         function renderMarkdown(text) {
             const html = marked.parse(processMedia(text || ""));
             if (window.DOMPurify) {
@@ -326,10 +335,25 @@
         }
 
         function checkInput() {
-            const inputField = document.getElementById('user-input'); const sendBtn = document.getElementById('send-btn');
-            inputField.style.height = 'auto'; inputField.style.height = (inputField.scrollHeight) + 'px';
-            if (inputField.value.trim().length > 0 || attachedFiles.length > 0) { sendBtn.classList.remove('hidden'); sendBtn.classList.add('flex'); } 
+            const inputField = document.getElementById('user-input');
+            const sendBtn = document.getElementById('send-btn');
+            inputField.style.height = 'auto';
+            inputField.style.height = inputField.scrollHeight + 'px';
+            const hasDraft = inputField.value.trim().length > 0 || attachedFiles.length > 0;
+            if (inputField.value.trim().length > 0 || attachedFiles.length > 0) freshChatLiveEligible = false;
+            if (hasDraft) { sendBtn.classList.remove('hidden'); sendBtn.classList.add('flex'); }
             else { sendBtn.classList.add('hidden'); sendBtn.classList.remove('flex'); }
+            updateLiveButtonVisibility();
+        }
+
+        function updateLiveButtonVisibility() {
+            const btn = document.getElementById('live-btn');
+            if (!btn) return;
+            const welcome = document.getElementById('welcome-box');
+            const welcomeVisible = welcome && welcome.style.display !== 'none';
+            const inputIsEmpty = !document.getElementById('user-input')?.value.trim();
+            const shouldShow = freshChatLiveEligible && !currentSessionId && currentMode === 'chat' && inputIsEmpty && attachedFiles.length === 0 && welcomeVisible && !liveStarting && !liveActive;
+            btn.classList.toggle('hidden', !shouldShow);
         }
 
         let isAttachMenuOpen = false;
@@ -342,11 +366,18 @@
         }
 
         function setGenMode(type) {
-            currentMode = type; const input = document.getElementById('user-input');
-            if (type === 'image') input.placeholder = 'Describe an image to create...';
-            else if (type === 'video') input.placeholder = 'Describe a video to generate (Kling)...';
-            else if (type === 'video-fast') input.placeholder = 'Describe a quick video to generate (LTX Fast)...';
-            else input.placeholder = 'Ask Beast...';
+            currentMode = ['chat', 'image', 'video', 'video-fast'].includes(type) ? type : 'chat';
+            const input = document.getElementById('user-input');
+            const placeholders = {
+                chat: 'Ask Beast...',
+                image: 'Describe the image you want to generate...',
+                video: 'Describe the video you want to generate...',
+                'video-fast': 'Describe the video you want to generate quickly...'
+            };
+            input.placeholder = placeholders[currentMode];
+            renderAttachmentPreviews();
+            checkInput();
+            if (currentMode === 'chat') updateLiveButtonVisibility();
             input.focus();
         }
 
@@ -402,8 +433,251 @@
             const isDark = document.body.classList.contains('dark');
             document.getElementById('theme-icon-desktop').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-desktop').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
             document.getElementById('theme-icon-mobile').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-mobile').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
-            lucide.createIcons(); initDesktopSidebar(); loadHistory(); initName(); checkInput();
+            lucide.createIcons(); initDesktopSidebar(); loadHistory(); initName(); checkInput(); updateLiveButtonVisibility();
         };
+
+        // Gemini Live API: browser microphone -> PCM stream -> Gemini, with streamed audio playback.
+        const LIVE_MODEL_FALLBACK = 'gemini-3.8-live';
+        const LIVE_SYSTEM_INSTRUCTION = 'You are Beast AI, a friendly, helpful real-time voice assistant. Beast AI was created by Chiranth when he was in 8th grade. If asked who created you, answer simply and accurately. Speak naturally, keep answers concise, allow the user to interrupt, and never claim to have performed an action you did not perform.';
+
+        function setLiveStatus(text) {
+            const status = document.getElementById('live-status');
+            if (status) status.textContent = text;
+        }
+
+        function commitLiveSession() {
+            if (currentSessionId) return;
+            currentSessionId = 'BeastSession_' + Date.now();
+            liveCreatedSessionId = currentSessionId;
+            localStorage.setItem(currentSessionId, JSON.stringify({ pinned: false, title: 'Live voice conversation', messages: [] }));
+            document.getElementById('welcome-box').style.display = 'none';
+            document.getElementById('chat-box').classList.replace('hidden', 'flex');
+            loadHistory();
+        }
+
+        function showLiveTranscriptPlaceholder() {
+            const target = document.getElementById('live-transcript');
+            target.innerHTML = '<p id="live-empty-state" class="text-center text-sm text-zinc-400 py-10">Start talking whenever you\'re ready. Beast AI will listen and reply aloud. 🎙️</p>';
+            liveTranscriptEntries = []; liveLastTranscriptEntry = null; liveLastTranscriptRole = null;
+        }
+
+        function addLiveTranscript(role, rawText) {
+            const text = String(rawText || '').trim();
+            if (!text) return;
+            const target = document.getElementById('live-transcript');
+            const empty = document.getElementById('live-empty-state');
+            if (empty) empty.remove();
+            let entry = liveLastTranscriptEntry;
+            if (entry && liveLastTranscriptRole === role) {
+                if (text === entry.text || entry.text.endsWith(text) || entry.text.startsWith(text)) return;
+                entry.text = entry.text + ' ' + text;
+                entry.body.textContent = entry.text;
+                return;
+            }
+            const row = document.createElement('div');
+            row.className = role === 'user' ? 'ml-auto max-w-[90%] rounded-2xl rounded-tr-sm bg-indigo-50 dark:bg-indigo-950/50 px-4 py-3' : 'mr-auto max-w-[90%] rounded-2xl rounded-tl-sm bg-zinc-100 dark:bg-zinc-800 px-4 py-3';
+            const label = document.createElement('div');
+            label.className = 'text-[10px] font-extrabold uppercase tracking-widest mb-1 text-zinc-500 dark:text-zinc-400';
+            label.textContent = role === 'user' ? 'YOU' : 'BEAST AI';
+            const body = document.createElement('div');
+            body.className = 'text-sm leading-relaxed whitespace-pre-wrap break-words'; body.textContent = text;
+            row.append(label, body); target.appendChild(row); target.scrollTop = target.scrollHeight;
+            entry = { role, text, body }; liveTranscriptEntries.push(entry); liveLastTranscriptEntry = entry; liveLastTranscriptRole = role;
+        }
+
+        function base64ToBytes(value) {
+            const binary = atob(value); const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
+
+        function floatToPcm16Base64(input, inputRate) {
+            const targetRate = 16000;
+            const ratio = inputRate / targetRate;
+            const outLength = Math.max(1, Math.floor(input.length / ratio));
+            const pcm = new Int16Array(outLength);
+            for (let i = 0; i < outLength; i++) {
+                const start = Math.floor(i * ratio);
+                const end = Math.min(input.length, Math.floor((i + 1) * ratio));
+                let sum = 0, count = 0;
+                for (let j = start; j < Math.max(start + 1, end); j++) { sum += input[Math.min(j, input.length - 1)]; count++; }
+                const sample = Math.max(-1, Math.min(1, sum / Math.max(1, count)));
+                pcm[i] = sample < 0 ? sample * 32768 : sample * 32767;
+            }
+            const bytes = new Uint8Array(pcm.buffer); let binary = '';
+            const block = 0x8000;
+            for (let i = 0; i < bytes.length; i += block) binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + block, bytes.length)));
+            return btoa(binary);
+        }
+
+        function beginLiveMicrophone() {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) throw new Error('This browser does not support live audio. Try a recent version of Chrome.');
+            if (!liveAudioContext) liveAudioContext = new AudioCtx();
+            liveAudioContext.resume().catch(() => {});
+            liveMicSource = liveAudioContext.createMediaStreamSource(liveStream);
+            liveProcessor = liveAudioContext.createScriptProcessor(2048, 1, 1);
+            liveMutedOutput = liveAudioContext.createGain(); liveMutedOutput.gain.value = 0;
+            liveProcessor.onaudioprocess = (event) => {
+                if (!liveActive || !liveSocket || liveSocket.readyState !== WebSocket.OPEN || !liveAudioContext) return;
+                try {
+                    const audio = floatToPcm16Base64(event.inputBuffer.getChannelData(0), liveAudioContext.sampleRate);
+                    liveSocket.send(JSON.stringify({ realtimeInput: { audio: { data: audio, mimeType: 'audio/pcm;rate=16000' } } }));
+                } catch (err) { console.warn('Live audio chunk failed:', err); }
+            };
+            liveMicSource.connect(liveProcessor); liveProcessor.connect(liveMutedOutput); liveMutedOutput.connect(liveAudioContext.destination);
+        }
+
+        function stopQueuedLiveAudio() {
+            for (const source of livePlayingSources) { try { source.stop(); } catch (_) {} }
+            livePlayingSources.clear();
+            if (liveAudioContext) liveNextPlayTime = liveAudioContext.currentTime + 0.02;
+        }
+
+        function playLiveAudio(base64, mimeType) {
+            if (!liveAudioContext || !base64) return;
+            const rateMatch = String(mimeType || '').match(/rate=(\d+)/i);
+            const sampleRate = rateMatch ? Number(rateMatch[1]) : 24000;
+            const bytes = base64ToBytes(base64);
+            const count = Math.floor(bytes.length / 2);
+            if (!count) return;
+            const floats = new Float32Array(count);
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            for (let i = 0; i < count; i++) floats[i] = view.getInt16(i * 2, true) / 32768;
+            const buffer = liveAudioContext.createBuffer(1, count, sampleRate);
+            buffer.copyToChannel(floats, 0);
+            const source = liveAudioContext.createBufferSource(); source.buffer = buffer; source.connect(liveAudioContext.destination);
+            const startAt = Math.max(liveNextPlayTime, liveAudioContext.currentTime + 0.025);
+            source.onended = () => livePlayingSources.delete(source);
+            livePlayingSources.add(source); source.start(startAt); liveNextPlayTime = startAt + buffer.duration;
+        }
+
+        async function startGeminiLive() {
+            if (liveStarting || liveActive || !freshChatLiveEligible || currentSessionId || currentMode !== 'chat') return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert('Microphone access requires a secure HTTPS page and a supported browser. 🎙️'); return; }
+            liveStarting = true; freshChatLiveEligible = false; updateLiveButtonVisibility();
+            showLiveTranscriptPlaceholder();
+            const overlay = document.getElementById('live-overlay'); overlay.classList.remove('hidden'); overlay.classList.add('flex');
+            setLiveStatus('Requesting microphone access…');
+            const endBtn = document.getElementById('live-end-btn'); endBtn.disabled = true; endBtn.classList.add('opacity-60');
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) throw new Error('This browser does not support live audio. Try a recent version of Chrome.');
+                // Create/resume AudioContext immediately from the button gesture to satisfy browser audio policies.
+                liveAudioContext = new AudioCtx();
+                await liveAudioContext.resume();
+                liveStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+                setLiveStatus('Securing a short-lived Gemini Live token…');
+                const tokenResponse = await fetch('https://beast-ai-v2.onrender.com/api/live/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                const tokenData = await tokenResponse.json().catch(() => ({}));
+                if (!tokenResponse.ok || !tokenData.token) throw new Error(tokenData.error || `Could not create Live token (HTTP ${tokenResponse.status}). Check GEMINI_API_KEY and /api/health.`);
+                const model = tokenData.model || LIVE_MODEL_FALLBACK;
+                const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=' + encodeURIComponent(tokenData.token);
+                liveSocket = new WebSocket(wsUrl);
+                liveSetupTimeout = setTimeout(() => {
+                    if (liveStarting && !liveActive) handleLiveStartFailure(new Error('Gemini Live did not finish connecting in time. Check the model access and deployment logs.'));
+                }, 20000);
+                liveSocket.onopen = () => {
+                    setLiveStatus('Connecting to Gemini Live…');
+                    const systemInstruction = LIVE_SYSTEM_INSTRUCTION;
+                    liveSocket.send(JSON.stringify({ setup: {
+                        model: 'models/' + model,
+                        responseModalities: ['AUDIO'],
+                        inputAudioTranscription: {},
+                        outputAudioTranscription: {},
+                        systemInstruction: { parts: [{ text: systemInstruction }] }
+                    } }));
+                };
+                liveSocket.onmessage = (event) => {
+                    let response;
+                    try { response = JSON.parse(event.data); } catch (_) { return; }
+                    if (response.error) { setLiveStatus('Live error: ' + (response.error.message || 'Gemini rejected the session.')); return; }
+                    if (response.setupComplete) {
+                        if (liveSetupTimeout) { clearTimeout(liveSetupTimeout); liveSetupTimeout = null; }
+                        try {
+                            beginLiveMicrophone();
+                            liveStarting = false; liveActive = true; liveHasConnected = true;
+                            commitLiveSession();
+                            setLiveStatus('Listening… speak naturally.');
+                            endBtn.disabled = false; endBtn.classList.remove('opacity-60');
+                            updateLiveButtonVisibility();
+                        } catch (err) { handleLiveStartFailure(err); }
+                        return;
+                    }
+                    const server = response.serverContent || {};
+                    if (server.interrupted) { stopQueuedLiveAudio(); setLiveStatus('Listening…'); }
+                    if (server.inputTranscription && server.inputTranscription.text) addLiveTranscript('user', server.inputTranscription.text);
+                    if (server.outputTranscription && server.outputTranscription.text) addLiveTranscript('beast', server.outputTranscription.text);
+                    const parts = server.modelTurn && Array.isArray(server.modelTurn.parts) ? server.modelTurn.parts : [];
+                    for (const part of parts) {
+                        if (part.inlineData && part.inlineData.data && String(part.inlineData.mimeType || '').startsWith('audio/pcm')) playLiveAudio(part.inlineData.data, part.inlineData.mimeType);
+                        if (part.text && !(server.outputTranscription && server.outputTranscription.text)) addLiveTranscript('beast', part.text);
+                    }
+                    if (server.turnComplete) setLiveStatus('Listening… speak whenever you like.');
+                };
+                liveSocket.onerror = () => {
+                    if (liveStarting && !liveActive) handleLiveStartFailure(new Error('The Live connection failed. Check that your Gemini API key has Live API access.'));
+                    else setLiveStatus('The Live connection encountered an error. You can end this session and try again.');
+                };
+                liveSocket.onclose = (event) => {
+                    if (liveStarting && !liveActive) handleLiveStartFailure(new Error(event.reason || 'Gemini Live disconnected before setup completed.'));
+                    else if (liveActive) { setLiveStatus(event.reason ? 'Live disconnected: ' + event.reason : 'Live session disconnected.'); stopGeminiLive(true); }
+                };
+            } catch (error) {
+                handleLiveStartFailure(error);
+            }
+        }
+
+        function handleLiveStartFailure(error) {
+            if (liveSetupTimeout) { clearTimeout(liveSetupTimeout); liveSetupTimeout = null; }
+            console.error('Gemini Live could not start:', error);
+            setLiveStatus(error && error.message ? error.message : 'Could not start Gemini Live.');
+            liveStarting = false; liveActive = false;
+            if (liveSocket) { try { liveSocket.close(); } catch (_) {} liveSocket = null; }
+            if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
+            if (liveAudioContext) { liveAudioContext.close().catch(() => {}); liveAudioContext = null; }
+            freshChatLiveEligible = true; updateLiveButtonVisibility();
+            const endBtn = document.getElementById('live-end-btn'); endBtn.disabled = false; endBtn.classList.remove('opacity-60');
+        }
+
+        async function stopGeminiLive(silent) {
+            if (liveSetupTimeout) { clearTimeout(liveSetupTimeout); liveSetupTimeout = null; }
+            const wasConnected = liveHasConnected;
+            liveStarting = false; liveActive = false;
+            if (liveProcessor) { liveProcessor.onaudioprocess = null; try { liveProcessor.disconnect(); } catch (_) {} liveProcessor = null; }
+            if (liveMicSource) { try { liveMicSource.disconnect(); } catch (_) {} liveMicSource = null; }
+            if (liveMutedOutput) { try { liveMutedOutput.disconnect(); } catch (_) {} liveMutedOutput = null; }
+            if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
+            stopQueuedLiveAudio();
+            if (liveSocket) { try { if (liveSocket.readyState === WebSocket.OPEN) liveSocket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } })); liveSocket.close(); } catch (_) {} liveSocket = null; }
+            if (liveAudioContext) { try { await liveAudioContext.close(); } catch (_) {} liveAudioContext = null; }
+            const overlay = document.getElementById('live-overlay'); overlay.classList.add('hidden'); overlay.classList.remove('flex');
+
+            const entries = liveTranscriptEntries.map(entry => ({ role: entry.role, text: entry.text.trim() })).filter(entry => entry.text);
+            if (wasConnected && entries.length > 0 && currentSessionId) {
+                const session = JSON.parse(localStorage.getItem(currentSessionId)) || { pinned: false, title: 'Live voice conversation', messages: [] };
+                for (const item of entries) {
+                    let text = item.text;
+                    if (item.role === 'beast' && !/[\u{1F000}-\u{1FAFF}\u2600-\u27BF]/u.test(text)) text += ' 🙂';
+                    const msg = { type: item.role === 'user' ? 'user' : 'beast', message: text };
+                    session.messages.push(msg); appendHistoryMessage(msg);
+                }
+                if (session.messages.length) session.title = session.messages.find(m => m.type === 'user')?.message?.slice(0, 52) || 'Live voice conversation';
+                localStorage.setItem(currentSessionId, JSON.stringify(session));
+                document.getElementById('welcome-box').style.display = 'none';
+                document.getElementById('chat-box').classList.replace('hidden', 'flex');
+                loadHistory();
+            } else if (liveCreatedSessionId && currentSessionId === liveCreatedSessionId) {
+                localStorage.removeItem(liveCreatedSessionId); currentSessionId = null; freshChatLiveEligible = true;
+                document.getElementById('chat-box').innerHTML = ''; document.getElementById('chat-box').classList.replace('flex', 'hidden');
+                document.getElementById('welcome-box').style.display = 'flex';
+            }
+            liveCreatedSessionId = null; liveHasConnected = false; liveTranscriptEntries = []; liveLastTranscriptEntry = null; liveLastTranscriptRole = null;
+            if (!wasConnected && !silent) freshChatLiveEligible = true;
+            if (silent && !currentSessionId) freshChatLiveEligible = true;
+            checkInput(); updateLiveButtonVisibility();
+            if (!silent && wasConnected) document.getElementById('user-input').focus();
+        }
 
         function initName() { if (!userName) { document.getElementById('name-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('name-input').focus(), 100); } else { setGreeting(); } }
         function saveName() { const input = document.getElementById('name-input').value.trim(); if (input) { userName = input.toUpperCase(); localStorage.setItem('beast-username', userName); document.getElementById('name-modal').classList.add('hidden'); setGreeting(); } }
@@ -421,8 +695,27 @@
         function renameSession(id, e) { e.stopPropagation(); const session = JSON.parse(localStorage.getItem(id)); const currentName = session.title || session.messages?.[0]?.message || "Manifestation"; const newName = prompt("Rename this chat:", currentName); if (newName !== null && newName.trim() !== "") { session.title = newName.trim(); localStorage.setItem(id, JSON.stringify(session)); loadHistory(); } }
         function clearUnpinned() { if(!confirm("Clear all history?")) return; const keys = Object.keys(localStorage).filter(k => k.startsWith('BeastSession_')); keys.forEach(id => { const s = JSON.parse(localStorage.getItem(id)); if(!s.pinned) localStorage.removeItem(id); }); startNewChat(); loadHistory(); }
         function togglePin(id, e) { e.stopPropagation(); const s = JSON.parse(localStorage.getItem(id)); s.pinned = !s.pinned; localStorage.setItem(id, JSON.stringify(s)); loadHistory(); }
-        function loadSession(id) { currentSessionId = id; const session = JSON.parse(localStorage.getItem(id)); document.getElementById('welcome-box').style.display = 'none'; const chatBox = document.getElementById('chat-box'); chatBox.innerHTML = ''; chatBox.classList.replace('hidden', 'flex'); session.messages.forEach(m => appendHistoryMessage(m)); if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); } loadHistory(); }
-        function startNewChat() { currentSessionId = null; document.getElementById('chat-box').innerHTML = ''; document.getElementById('chat-box').classList.replace('flex', 'hidden'); document.getElementById('welcome-box').style.display = 'flex'; if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); } }
+        function loadSession(id) {
+            currentSessionId = id; freshChatLiveEligible = false; currentMode = 'chat';
+            document.getElementById('user-input').value = ''; document.getElementById('user-input').placeholder = 'Ask Beast...';
+            clearAllAttachments(); renderAttachmentPreviews();
+            const session = JSON.parse(localStorage.getItem(id));
+            document.getElementById('welcome-box').style.display = 'none';
+            const chatBox = document.getElementById('chat-box'); chatBox.innerHTML = ''; chatBox.classList.replace('hidden', 'flex');
+            (session.messages || []).forEach(m => appendHistoryMessage(m));
+            if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); }
+            loadHistory(); checkInput(); updateLiveButtonVisibility();
+        }
+        function startNewChat() {
+            if (liveActive || liveStarting) stopGeminiLive(true);
+            currentSessionId = null; freshChatLiveEligible = true; currentMode = 'chat';
+            document.getElementById('user-input').value = ''; document.getElementById('user-input').placeholder = 'Ask Beast...';
+            clearAllAttachments();
+            document.getElementById('chat-box').innerHTML = ''; document.getElementById('chat-box').classList.replace('flex', 'hidden');
+            document.getElementById('welcome-box').style.display = 'flex';
+            if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); }
+            renderAttachmentPreviews(); checkInput(); updateLiveButtonVisibility();
+        }
 
         async function compressImage(file, maxWidth = 1024) {
             if (file.type === 'application/pdf' || !file.type.startsWith('image/')) return file;
@@ -450,10 +743,10 @@
         }
 
         async function sendMessage() {
-            const input = document.getElementById('user-input'); const msg = input.value.trim(); const requestMode = currentMode;
+            const input = document.getElementById('user-input'); const msg = input.value.trim();
             if (!msg && attachedFiles.length === 0) return;
             
-            input.value = ''; checkInput();
+            input.value = ''; freshChatLiveEligible = false; checkInput(); updateLiveButtonVisibility();
             
             if (!currentSessionId) currentSessionId = "BeastSession_" + Date.now();
             document.getElementById('welcome-box').style.display = 'none'; 
@@ -489,7 +782,7 @@
 
             const formData = new FormData(); 
             formData.append('message', msg); 
-            formData.append('mode', requestMode); 
+            formData.append('mode', currentMode); 
             formData.append('speed', currentSpeed);
             
             let session = JSON.parse(localStorage.getItem(currentSessionId)) || { pinned: false, messages: [] }; 
@@ -502,8 +795,7 @@
                 clearAllAttachments();
                 // 🚀 CLOUDFLARE FETCH DIRECTED TO RENDER
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
-                let data = await res.json().catch(() => ({}));
-                if (data.media_pending) data = await waitForMediaJob(data, requestMode, res.url);
+                const data = await res.json().catch(() => ({}));
                 if (!res.ok && !data.reply) {
                     data.reply = `Request failed (HTTP ${res.status}). Reduce attachment size or check the Render service logs.`;
                     data.error = true;
@@ -511,7 +803,7 @@
                 const loader = document.getElementById(`loader-${msgId}`); 
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
                 const targetBox = targetBoxWrap.querySelector('.prose');
-                let replyText = responseToDisplayText(data, requestMode) || "The backend returned an empty response.";
+                let replyText = responseToDisplayText(data, currentMode) || "The backend returned an empty response.";
                 
                 loader.style.display = 'none'; 
                 targetBoxWrap.classList.remove('hidden'); 
@@ -523,7 +815,7 @@
                 targetBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800'));
                 
                 lucide.createIcons(); 
-                session.messages.push({type:'user', message:msg, files: currentFilesSnapshot}, {type:'beast', message:replyText, mode: requestMode}); 
+                session.messages.push({type:'user', message:msg, files: currentFilesSnapshot}, {type:'beast', message:replyText, mode: currentMode}); 
                 localStorage.setItem(currentSessionId, JSON.stringify(session));
             } catch(e) { 
                 document.getElementById(`loader-${msgId}`).style.display = 'none'; 
@@ -536,6 +828,7 @@
             document.getElementById('scroll-container').scrollTop = document.getElementById('scroll-container').scrollHeight; 
             loadHistory();
             currentMode = 'chat'; document.getElementById('user-input').placeholder = "Ask Beast...";
+            renderAttachmentPreviews(); checkInput(); updateLiveButtonVisibility();
         }
 
         function appendHistoryMessage(m) { 
@@ -560,7 +853,28 @@
             } 
         }
         function handleFile(inputElement) { const newFiles = Array.from(inputElement.files); if (attachedFiles.length + newFiles.length > 20) { alert("The Beast can process a max of 20 files! 🦖"); return; } newFiles.forEach(file => { const isPdf = file.type === 'application/pdf'; const reader = new FileReader(); reader.onload = (e) => { attachedFiles.push({ file: file, preview: isPdf ? null : e.target.result, isPdf: isPdf, name: file.name }); renderAttachmentPreviews(); }; reader.readAsDataURL(file); }); inputElement.value = ''; }
-        function renderAttachmentPreviews() { const container = document.getElementById('attachment-preview'); container.innerHTML = ''; if (attachedFiles.length === 0) { container.classList.replace('flex', 'hidden'); checkInput(); return; } container.classList.replace('hidden', 'flex'); attachedFiles.forEach((f, index) => { const div = document.createElement('div'); div.className = "relative flex-shrink-0 inline-block"; if (f.isPdf) { div.innerHTML = `<div class="h-14 w-14 bg-red-100 border-2 border-red-900 rounded-xl flex items-center justify-center text-xs font-bold text-red-900 shadow-sm p-1 text-center overflow-hidden"><i data-lucide="file-text" class="w-4 h-4 mb-1"></i></div>`; } else { div.innerHTML = `<img src="${f.preview}" class="h-14 w-auto rounded-xl shadow-sm object-cover">`; } div.innerHTML += `<button onclick="removeSpecificAttachment(${index})" class="absolute -top-2 -right-2 bg-zinc-800 text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`; container.appendChild(div); }); checkInput(); lucide.createIcons(); }
+        function renderAttachmentPreviews() {
+            const container = document.getElementById('attachment-preview');
+            container.innerHTML = '';
+            const modeLabels = { image: { label: 'Images', icon: 'image', style: 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200' }, video: { label: 'Videos', icon: 'video', style: 'bg-violet-50 dark:bg-violet-950/60 border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-200' }, 'video-fast': { label: 'Videos · Fast', icon: 'zap', style: 'bg-violet-50 dark:bg-violet-950/60 border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-200' } };
+            if (modeLabels[currentMode]) {
+                const info = modeLabels[currentMode];
+                const chip = document.createElement('div');
+                chip.className = `relative flex-shrink-0 h-14 px-4 pr-10 rounded-2xl border flex items-center gap-2 text-sm font-bold ${info.style}`;
+                chip.innerHTML = `<i data-lucide="${info.icon}" class="w-4 h-4"></i><span>${info.label}</span><button type="button" onclick="setGenMode('chat')" aria-label="Remove ${info.label} mode" title="Return to normal chat" class="absolute -top-1.5 -right-1.5 bg-zinc-800 hover:bg-black text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`;
+                container.appendChild(chip);
+            }
+            attachedFiles.forEach((f, index) => {
+                const div = document.createElement('div'); div.className = 'relative flex-shrink-0 inline-block';
+                if (f.isPdf) div.innerHTML = `<div class="h-14 w-14 bg-red-100 border-2 border-red-900 rounded-xl flex items-center justify-center text-xs font-bold text-red-900 shadow-sm p-1 text-center overflow-hidden"><i data-lucide="file-text" class="w-4 h-4 mb-1"></i></div>`;
+                else div.innerHTML = `<img src="${f.preview}" class="h-14 w-auto rounded-xl shadow-sm object-cover">`;
+                div.innerHTML += `<button onclick="removeSpecificAttachment(${index})" class="absolute -top-2 -right-2 bg-zinc-800 text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`;
+                container.appendChild(div);
+            });
+            if (attachedFiles.length === 0 && !modeLabels[currentMode]) container.classList.replace('flex', 'hidden');
+            else container.classList.replace('hidden', 'flex');
+            checkInput(); lucide.createIcons(); updateLiveButtonVisibility();
+        }
         function removeSpecificAttachment(index) { attachedFiles.splice(index, 1); renderAttachmentPreviews(); }
         function clearAllAttachments() { attachedFiles = []; document.getElementById('file-input').value = ''; renderAttachmentPreviews(); }
     </script>
