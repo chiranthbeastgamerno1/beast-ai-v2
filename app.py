@@ -38,9 +38,12 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
 GROK_MODEL = os.environ.get("GROK_MODEL", "grok-4.6").strip()
 KIRA_FLASH_MODEL = os.environ.get("KIRA_FLASH_MODEL", "kira-3.5-flash").strip()
 KIRA_PRO_MODEL = os.environ.get("KIRA_PRO_MODEL", "kira-3.5-pro").strip()
-KIRA_IMAGE_MODEL = os.environ.get("KIRA_IMAGE_MODEL", "kira-3.0-image").strip()
-KIRA_VIDEO_MODEL = os.environ.get("KIRA_VIDEO_MODEL", "kira-3.0-video").strip()
-KIRA_VIDEO_FLASH_MODEL = os.environ.get("KIRA_VIDEO_FLASH_MODEL", "kira-3.0-video-flash").strip()
+
+# Media generation uses fal.ai rather than Kira's incompatible/unverified media routes.
+FAL_KEY = os.environ.get("FAL_KEY", "").strip()
+FAL_IMAGE_MODEL = os.environ.get("FAL_IMAGE_MODEL", "fal-ai/nano-banana-2").strip()
+FAL_VIDEO_MODEL = os.environ.get("FAL_VIDEO_MODEL", "fal-ai/kling-video/v3/standard/text-to-video").strip()
+FAL_VIDEO_FAST_MODEL = os.environ.get("FAL_VIDEO_FAST_MODEL", "fal-ai/ltx-2.3/text-to-video/fast").strip()
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -54,10 +57,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Beast AI's creator identity and emoji policy are enforced server-side so they
 # apply regardless of which configured text model handles a request.
-CREATOR_REPLY = (
-    "Beast AI was created by Chiranth when he was in 8th grade! 🚀 "
-    "The app uses AI models from external providers to power its responses."
-)
+CREATOR_REPLY = "Beast AI was created by Chiranth when he was in 8th grade! 🚀"
 
 _EMOJI_PATTERN = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]")
 _CREATOR_QUESTION_PATTERNS = tuple(re.compile(pattern, re.IGNORECASE) for pattern in (
@@ -178,7 +178,7 @@ def _find_media_url(payload: Any) -> str | None:
         value = payload.get(key)
         if isinstance(value, str) and value.strip().startswith(("https://", "http://")):
             return value.strip()
-    for key in ("data", "images", "videos", "output", "outputs", "result", "results", "artifacts"):
+    for key in ("data", "image", "images", "video", "videos", "output", "outputs", "result", "results", "artifacts"):
         if key in payload:
             result = _find_media_url(payload[key])
             if result:
@@ -196,87 +196,110 @@ def _media_response(media_type: str, url: str, provider: str, note: str = ""):
     }), 200
 
 
-def _make_image(message: str):
-    key = os.environ.get("KIRA_IMAGE_API_KEY", "").strip()
-    errors: list[str] = []
-    if key:
+def _fal_http_json(url: str, method: str = "GET", payload: dict[str, Any] | None = None, timeout: int = 20) -> dict[str, Any]:
+    """Call fal.ai's authenticated queue API from the server, never from browser code."""
+    if not FAL_KEY:
+        raise RuntimeError("FAL_KEY is not configured in the hosting environment.")
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Key {FAL_KEY}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+        method=method,
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        raw = response.read().decode("utf-8", errors="replace")
         try:
-            result = _http_request_json(
-                f"{KIRA_API_BASE_URL}/images/generations",
-                key,
-                {"model": KIRA_IMAGE_MODEL, "prompt": message, "n": 1},
-                timeout=25 if IS_VERCEL else 45,
-            )
-            url = _find_media_url(result)
-            if url:
-                return _media_response("image", url, "Kira")
-            errors.append("Kira returned JSON but no direct image URL.")
-        except Exception as exc:
-            errors.append(_provider_error(exc, "Kira image API"))
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"fal.ai returned non-JSON response (HTTP {response.status}).") from exc
+        if not isinstance(data, dict):
+            raise ValueError("fal.ai returned an unexpected JSON response.")
+        return data
+
+
+def _fal_config_for_mode(mode: str) -> tuple[str, str, dict[str, Any]]:
+    """Return model endpoint, media type, and provider-specific input payload."""
+    prompt = ""  # replaced by caller after selecting the endpoint
+    if mode == "image":
+        endpoint = FAL_IMAGE_MODEL
+        media_type = "image"
+        payload = {"prompt": prompt, "num_images": 1, "aspect_ratio": "auto", "resolution": "1K", "output_format": "png"}
+    elif mode == "video-fast":
+        endpoint = FAL_VIDEO_FAST_MODEL
+        media_type = "video"
+        payload = {"prompt": prompt, "duration": 6, "resolution": "1080p", "aspect_ratio": "16:9", "fps": 25, "generate_audio": False}
     else:
-        errors.append("KIRA_IMAGE_API_KEY is not configured.")
+        endpoint = FAL_VIDEO_MODEL
+        media_type = "video"
+        payload = {"prompt": prompt, "duration": "5", "generate_audio": False}
+    # These values come from deployment environment variables, but still validate them
+    # before using them in a URL path.
+    if not endpoint or not re.fullmatch(r"[A-Za-z0-9._/-]+", endpoint) or ".." in endpoint:
+        raise ValueError("Invalid fal.ai model endpoint configuration.")
+    return endpoint, media_type, payload
 
-    # Fallback is a third-party URL generator, not a promise of unlimited service.
-    seed = random.randint(1, 2_147_483_647)
-    encoded_prompt = urllib.parse.quote(message, safe="")
-    fallback_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?nologo=true&seed={seed}"
-    note = "Kira image generation was unavailable; using the external Pollinations fallback. " + " ".join(errors)
-    return _media_response("image", fallback_url, "Pollinations fallback", note)
 
-
-def _make_video(message: str, fast: bool):
-    env_name = "KIRA_VIDEO_FLASH_API_KEY" if fast else "KIRA_VIDEO_API_KEY"
-    key = os.environ.get(env_name, "").strip()
-    model = KIRA_VIDEO_FLASH_MODEL if fast else KIRA_VIDEO_MODEL
-    if not key:
+def _start_fal_media_job(message: str, mode: str):
+    if not FAL_KEY:
         return jsonify({
-            "reply": f"Video generation is not configured: add {env_name} in the hosting environment.",
+            "reply": "Image and video generation need a fal.ai API key. Add FAL_KEY in the hosting environment, then redeploy. 🔑",
             "error": True,
         }), 200
     try:
-        result = _http_request_json(
-            f"{KIRA_API_BASE_URL}/videos/generations",
-            key,
-            {"model": model, "prompt": message},
-            timeout=VIDEO_TIMEOUT_SECONDS,
-        )
-        url = _find_media_url(result)
-        if url:
-            return _media_response("video", url, "Kira")
-        # Some video services return an async task instead of an immediate URL. Don't invent a polling URL.
-        possible_id = result.get("id") or result.get("task_id") or result.get("job_id")
-        status = result.get("status") or result.get("state")
-        detail = "The provider did not return a playable video URL."
-        if possible_id:
-            detail += f" It returned job ID {str(possible_id)[:160]}"
-            if status:
-                detail += f" (status: {str(status)[:80]})"
-            detail += ". This provider's documented job-status endpoint is needed to fetch the finished video."
-        else:
-            detail += " Check Kira's API response format and model access."
-        return jsonify({"reply": detail, "error": True, "provider_response_fields": list(result.keys())[:20]}), 200
+        endpoint, media_type, payload = _fal_config_for_mode(mode)
+        payload["prompt"] = message
+        submit_url = "https://queue.fal.run/" + urllib.parse.quote(endpoint, safe="/")
+        submitted = _fal_http_json(submit_url, method="POST", payload=payload, timeout=20)
+        request_id = submitted.get("request_id") or submitted.get("requestId")
+        if not isinstance(request_id, str) or not request_id.strip():
+            return jsonify({
+                "reply": "fal.ai accepted no trackable job ID. Check the fal.ai API response and account access. ⚠️",
+                "error": True,
+            }), 200
+        return jsonify({
+            "media_pending": True,
+            "request_id": request_id,
+            "mode": mode,
+            "media_type": media_type,
+            "provider": "fal.ai",
+        }), 202
     except Exception as exc:
-        return jsonify({"reply": _provider_error(exc, "Kira video API"), "error": True}), 200
+        return jsonify({"reply": _provider_error(exc, "fal.ai media API"), "error": True}), 200
 
 
-def _chat_history(raw: str) -> list[dict[str, str]]:
+def _poll_fal_media_job(mode: str, request_id: str):
+    if not FAL_KEY:
+        return jsonify({"reply": "FAL_KEY is missing from the hosting environment. 🔑", "error": True}), 200
+    if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,160}", request_id):
+        return jsonify({"reply": "The media job ID is invalid. Please start a new generation. ⚠️", "error": True}), 400
+    if mode not in {"image", "video", "video-fast"}:
+        return jsonify({"reply": "Unknown media generation mode. ⚠️", "error": True}), 400
     try:
-        parsed = json.loads(raw or "[]")
-    except (ValueError, TypeError):
-        return []
-    if not isinstance(parsed, list):
-        return []
-    history: list[dict[str, str]] = []
-    for item in parsed[-10:]:
-        if not isinstance(item, dict):
-            continue
-        text = item.get("message")
-        if not isinstance(text, str) or not text.strip():
-            continue
-        role = "user" if item.get("type") == "user" else "assistant"
-        history.append({"role": role, "text": text[:12000]})
-    return history
-
+        endpoint, media_type, _ = _fal_config_for_mode(mode)
+        quoted_endpoint = urllib.parse.quote(endpoint, safe="/")
+        quoted_id = urllib.parse.quote(request_id, safe="")
+        status_url = f"https://queue.fal.run/{quoted_endpoint}/requests/{quoted_id}/status"
+        status_payload = _fal_http_json(status_url, method="GET", timeout=15)
+        status = str(status_payload.get("status", "")).upper()
+        if status == "COMPLETED":
+            result_url = f"https://queue.fal.run/{quoted_endpoint}/requests/{quoted_id}"
+            result = _fal_http_json(result_url, method="GET", timeout=20)
+            media_url = _find_media_url(result)
+            if not media_url:
+                return jsonify({"reply": "fal.ai marked the job complete but did not return a media URL. Check the provider result schema. ⚠️", "error": True}), 200
+            return _media_response(media_type, media_url, "fal.ai")
+        if status in {"FAILED", "ERROR", "CANCELLED"}:
+            detail = status_payload.get("error") or status_payload.get("detail") or "The provider failed to generate this media."
+            return jsonify({"reply": f"fal.ai generation failed ({status}): {str(detail)[:900]} ⚠️", "error": True}), 200
+        return jsonify({"media_pending": True, "queue_status": status or "IN_QUEUE"}), 200
+    except Exception as exc:
+        return jsonify({"reply": _provider_error(exc, "fal.ai media status"), "error": True}), 200
 
 def _openai_compatible_chat(api_url: str, api_key: str, model: str, history: list[dict[str, str]], message: str, system_prompt: str, timeout: int) -> str:
     messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
@@ -363,16 +386,16 @@ def health_check():
             "grok": GROK_MODEL,
             "kira_fast": KIRA_FLASH_MODEL,
             "kira_pro": KIRA_PRO_MODEL,
-            "kira_image": KIRA_IMAGE_MODEL,
-            "kira_video": KIRA_VIDEO_MODEL,
-            "kira_video_fast": KIRA_VIDEO_FLASH_MODEL,
+            "fal_image": FAL_IMAGE_MODEL,
+            "fal_video": FAL_VIDEO_MODEL,
+            "fal_video_fast": FAL_VIDEO_FAST_MODEL,
         },
         "features": {
             "chat": True,
             "attachments": GENAI_AVAILABLE and bool(keys),
-            "image_generation": True,  # Kira primary with an external fallback URL
-            "video_generation": bool(os.environ.get("KIRA_VIDEO_API_KEY")),
-            "video_generation_fast": bool(os.environ.get("KIRA_VIDEO_FLASH_API_KEY")),
+            "image_generation": bool(FAL_KEY),
+            "video_generation": bool(FAL_KEY),
+            "video_generation_fast": bool(FAL_KEY),
             "kira_pro_chat": bool(os.environ.get("KIRA_PRO_API_KEY")),
         },
     }), 200
@@ -382,6 +405,14 @@ def health_check():
 @app.route("/api/chat", methods=["GET"])
 def chat_health_compat():
     return health_check()
+
+
+@app.route("/api/media/status", methods=["POST"])
+def media_status():
+    body = _json_request_body()
+    mode = body.get("mode", "image")
+    request_id = body.get("request_id", "")
+    return _poll_fal_media_job(mode, request_id)
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -418,12 +449,12 @@ def chat():
 
         if mode == "image":
             if not message:
-                return jsonify({"reply": "Describe the image you want to generate."}), 200
-            return _make_image(message)
+                return jsonify({"reply": "Describe the image you want to generate. 🎨"}), 200
+            return _start_fal_media_job(message, mode)
         if mode in {"video", "video-fast"}:
             if not message:
-                return jsonify({"reply": "Describe the video you want to generate."}), 200
-            return _make_video(message, fast=(mode == "video-fast"))
+                return jsonify({"reply": "Describe the video you want to generate. 🎬"}), 200
+            return _start_fal_media_job(message, mode)
 
         ist = timezone(timedelta(hours=5, minutes=30))
         live_time = datetime.now(ist).strftime("%A, %d %B %Y, %I:%M %p IST")
