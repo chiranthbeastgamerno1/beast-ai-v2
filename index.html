@@ -77,21 +77,25 @@
         .desktop-sidebar .nav-text { opacity: 0; transition: opacity 0.2s ease; white-space: nowrap; }
         .desktop-sidebar:hover:not(.locked) .nav-text, .desktop-sidebar.locked .nav-text { opacity: 1; transition-delay: 0.1s; }
         
-        /* COMPOSER CENTERING FIX
-           Keep the input pill centered in the actual viewport, regardless of
-           whether the desktop sidebar is collapsed, expanded, or hidden. */
+        /* COMPOSER ALIGNMENT
+           Center the composer within the same workspace as the greeting.
+           The desktop workspace starts after the 68px collapsed sidebar and
+           after the 256px locked/open sidebar. On mobile the sidebar overlays
+           the page, so the composer remains centered in the viewport. */
         .main-content-shift { margin-left: 0; transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .pill-wrapper {
             left: 50% !important;
             right: auto !important;
             width: 100vw;
             transform: translateX(-50%);
-            transition: none;
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         @media (min-width: 1024px) {
             .main-content-shift { margin-left: 68px; }
             .main-content-shift.locked { margin-left: 16rem; }
-            /* Intentionally do not offset the composer for the sidebar. */
+            /* Center of the remaining workspace: viewport center + half sidebar width. */
+            .pill-wrapper { left: calc(50% + 34px) !important; }
+            .pill-wrapper.locked { left: calc(50% + 128px) !important; }
         }
     </style>
 </head>
@@ -387,7 +391,7 @@
         function closeSettings() { document.getElementById('settings-modal').classList.add('hidden'); }
         function saveSettings() { const input = document.getElementById('settings-name-input').value.trim(); if (input) { userName = input.toUpperCase(); localStorage.setItem('beast-username', userName); setGreeting(); closeSettings(); } }
         function setGreeting() { const nameToUse = userName || "MASTER"; const greetings = [`Ask away, ${nameToUse}!`, `The mic is yours, ${nameToUse}`, `Your move, ${nameToUse}!`]; document.getElementById('greeting-text').innerText = greetings[Math.floor(Math.random() * greetings.length)]; }
-        function initDesktopSidebar() { const sb = document.getElementById('desktop-sidebar'); const main = document.getElementById('main-content'); const pill = document.getElementById('pill-wrapper'); if (isDesktopSidebarLocked) { sb.classList.add('locked'); main.classList.add('locked'); pill.classList.add('locked'); } else { sb.classList.remove('locked'); main.classList.remove('locked'); pill.classList.add('locked'); } }
+        function initDesktopSidebar() { const sb = document.getElementById('desktop-sidebar'); const main = document.getElementById('main-content'); const pill = document.getElementById('pill-wrapper'); if (isDesktopSidebarLocked) { sb.classList.add('locked'); main.classList.add('locked'); pill.classList.add('locked'); } else { sb.classList.remove('locked'); main.classList.remove('locked'); pill.classList.remove('locked'); } }
         function toggleDesktopSidebar() { isDesktopSidebarLocked = !isDesktopSidebarLocked; localStorage.setItem('beast-sidebar-locked', isDesktopSidebarLocked); initDesktopSidebar(); }
         function toggleTheme() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('beast-theme', isDark ? 'dark' : 'light'); document.getElementById('theme-icon-mobile').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-mobile').innerText = isDark ? 'Light Mode' : 'Dark Mode'; document.getElementById('theme-icon-desktop').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-desktop').innerText = isDark ? 'Light Mode' : 'Dark Mode'; lucide.createIcons(); }
         function toggleMobileSidebar() { const sb = document.getElementById('mobile-sidebar'); const overlay = document.getElementById('mobile-overlay'); sb.classList.toggle('-translate-x-full'); overlay.classList.toggle('hidden'); }
