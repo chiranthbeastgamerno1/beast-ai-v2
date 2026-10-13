@@ -327,15 +327,21 @@
                     loader.innerHTML = `<div class="text-sm text-zinc-500 dark:text-zinc-400 py-2">${escapeHTML(statusText)}</div><div class="jumping-dots text-zinc-500 dark:text-zinc-400 py-1"><span></span><span></span><span></span></div>`;
                 }
                 await new Promise(resolve => setTimeout(resolve, 4000));
-                const response = await fetch('https://beast-ai-v2.onrender.com/api/media/status', {
+                const statusController = new AbortController();
+                const statusTimer = setTimeout(() => statusController.abort(), 25000);
+                let response;
+                try {
+                    response = await fetch('https://beast-ai-v2.onrender.com/api/media/status', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    signal: statusController.signal,
                     body: JSON.stringify({
                         mode: job.mode || currentMode,
                         request_id: job.request_id,
                         provider: job.provider
                     })
-                });
+                    });
+                } finally { clearTimeout(statusTimer); }
                 job = await response.json().catch(() => ({ reply: `Media status request failed (HTTP ${response.status}). ⚠️`, error: true }));
                 if (!response.ok && !job.reply) job.reply = `Media status request failed (HTTP ${response.status}). ⚠️`;
                 if (!job.media_pending) return job;
@@ -719,8 +725,21 @@
             formData.append('mode', currentMode); 
             formData.append('speed', currentSpeed);
             
-            let session = JSON.parse(localStorage.getItem(currentSessionId)) || { pinned: false, messages: [] }; 
-            let chatHistory = session.messages.slice(-100).map(m => ({ type: m.type, message: m.message || "" })); 
+            // Older/corrupt saved sessions must not break the request before its try/catch.
+            let session = { pinned: false, messages: [] };
+            try {
+                const rawSession = currentSessionId ? localStorage.getItem(currentSessionId) : null;
+                const parsedSession = rawSession ? JSON.parse(rawSession) : null;
+                if (parsedSession && Array.isArray(parsedSession.messages)) {
+                    session = { ...parsedSession, messages: parsedSession.messages };
+                }
+            } catch (sessionError) {
+                console.warn('Ignoring an invalid saved chat session and starting a clean history.', sessionError);
+            }
+            let chatHistory = session.messages.slice(-100)
+                .filter(m => m && typeof m === 'object')
+                .map(m => ({ type: m.type || m.role || 'user', message: String(m.message ?? m.text ?? m.content ?? '') }))
+                .filter(m => m.message.trim());
             formData.append('history', JSON.stringify(chatHistory));
             try {
                 for (let i = 0; i < attachedFiles.length; i++) {
@@ -728,7 +747,12 @@
                 }
                 clearAllAttachments();
                 // 🚀 CLOUDFLARE FETCH DIRECTED TO RENDER
-                const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
+                const chatController = new AbortController();
+                const chatTimer = setTimeout(() => chatController.abort(), 55000);
+                let res;
+                try {
+                    res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData, signal: chatController.signal });
+                } finally { clearTimeout(chatTimer); }
                 let data = await res.json().catch(() => ({}));
                 if (!res.ok && !data.reply) {
                     data.reply = `Request failed (HTTP ${res.status}). Reduce attachment size or check the Render service logs.`;
@@ -756,9 +780,12 @@
             } catch(e) { 
                 document.getElementById(`loader-${msgId}`).style.display = 'none'; 
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
-                targetBoxWrap.classList.remove('hidden'); 
-                lastSentReplyText = `Connection error: ${e && e.message ? e.message : "request failed"}. Check /api/health and the deployment logs.`;
-                targetBoxWrap.querySelector('.prose').innerHTML = renderMarkdown(lastSentReplyText); 
+                lastSentReplyText = e && e.name === "AbortError" ? "This request took too long and was stopped so the chat would not keep loading forever. Please retry, or check /api/health and the deployment logs. ⏳" : `Connection error: ${e && e.message ? e.message : "request failed"}. Check /api/health and the deployment logs. ⚠️`;
+                if (targetBoxWrap) {
+                    targetBoxWrap.classList.remove('hidden');
+                    const errorReply = targetBoxWrap.querySelector('.prose');
+                    if (errorReply) errorReply.innerHTML = renderMarkdown(lastSentReplyText);
+                }
             }
             lucide.createIcons(); 
             document.getElementById('send-btn').disabled = false; 
