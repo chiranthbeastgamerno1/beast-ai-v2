@@ -42,6 +42,8 @@ KIRA_FLASH_MODEL = os.environ.get("KIRA_FLASH_MODEL", "kira-3.5-flash").strip()
 KIRA_PRO_MODEL = os.environ.get("KIRA_PRO_MODEL", "kira-3.5-pro").strip()
 
 GEMINI_LIVE_MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.8-live").strip() or "gemini-3.8-live"
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
+GROQ_WHISPER_MODEL = os.environ.get("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo").strip() or "whisper-large-v3-turbo"
 LIVE_SYSTEM_INSTRUCTION = (
     "You are Beast AI, a friendly, helpful real-time voice assistant. "
     "Beast AI was created by Chiranth when he was in 8th grade. If asked who created you, answer simply and accurately. "
@@ -743,6 +745,71 @@ def _generate_with_gemini(keys: list[str], message: str, history: list[dict[str,
     return None, errors
 
 
+@app.route("/api/live/transcribe", methods=["POST"])
+def groq_live_transcribe():
+    """Transcribe one recorded voice turn with Groq Whisper. API key stays server-side."""
+    if not GROQ_API_KEY:
+        return jsonify({"error": "Voice mode is not configured. Add GROQ_API_KEY to your hosting environment and redeploy. 🎙️"}), 503
+    upload = request.files.get("audio") or request.files.get("file")
+    if upload is None:
+        return jsonify({"error": "No audio file received. Allow microphone access and try again. 🎙️"}), 400
+    audio_bytes = upload.read()
+    if not audio_bytes:
+        return jsonify({"error": "The audio recording was empty. Please record again. 🎙️"}), 400
+    # Vercel requests have a small body limit; fail with a useful message before contacting Groq.
+    if len(audio_bytes) > (3_700_000 if IS_VERCEL else 18_000_000):
+        return jsonify({"error": "That voice recording is too large. Keep each voice turn under about 45 seconds and try again. 🎙️"}), 413
+    mime_type = (upload.mimetype or "audio/webm").split(";")[0].strip().lower()
+    extensions = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "mp4", "audio/mpeg": "mp3", "audio/wav": "wav", "audio/x-wav": "wav", "audio/flac": "flac"}
+    extension = extensions.get(mime_type, "webm")
+    filename = f"beast-voice.{extension}"
+    boundary = "----BeastAIVoice" + str(random.randint(10**10, 10**12 - 1))
+    crlf = b"\r\n"
+    parts = []
+    def field(name: str, value: str) -> None:
+        parts.extend([b"--" + boundary.encode(), crlf,
+                      f'Content-Disposition: form-data; name="{name}"'.encode(), crlf,
+                      b"Content-Type: text/plain; charset=utf-8", crlf, crlf,
+                      value.encode("utf-8"), crlf])
+    field("model", GROQ_WHISPER_MODEL)
+    field("response_format", "json")
+    field("temperature", "0")
+    parts.extend([b"--" + boundary.encode(), crlf,
+                  f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode(), crlf,
+                  f"Content-Type: {mime_type}".encode(), crlf, crlf,
+                  audio_bytes, crlf,
+                  b"--" + boundary.encode() + b"--", crlf])
+    body = b"".join(parts)
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/audio/transcriptions",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=40 if IS_VERCEL else 60) as response:
+            result = json.loads(response.read().decode("utf-8", errors="replace"))
+        transcript = str(result.get("text", "")).strip() if isinstance(result, dict) else ""
+        if not transcript:
+            return jsonify({"error": "Groq Whisper returned an empty transcript. Try speaking more clearly. 🎙️"}), 502
+        return jsonify({"text": transcript, "model": GROQ_WHISPER_MODEL}), 200
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:700]
+        app.logger.warning("Groq Whisper returned HTTP %s: %s", exc.code, detail)
+        return jsonify({"error": f"Groq Whisper returned HTTP {exc.code}: {detail or 'No details provided.'}"}), exc.code
+    except (urllib.error.URLError, TimeoutError) as exc:
+        app.logger.warning("Groq Whisper connection failed: %s", exc)
+        return jsonify({"error": "Could not reach Groq Whisper. Check connectivity and try again. 🎙️"}), 502
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        app.logger.warning("Groq Whisper returned invalid JSON: %s", exc)
+        return jsonify({"error": "Groq Whisper returned an unreadable response. Please retry. 🎙️"}), 502
+
+
 @app.route("/api/live/token", methods=["POST"])
 def create_gemini_live_token():
     """Create a short-lived, single-use Gemini Live token for the browser."""
@@ -793,7 +860,8 @@ def health_check():
         "gemini_keys_configured": len(keys),
         "models": {
             "gemini": GEMINI_MODEL,
-            "gemini_live": GEMINI_LIVE_MODEL,
+            "gemini_live": "Groq Whisper transcription + browser speech output",
+            "groq_whisper": GROQ_WHISPER_MODEL,
             "grok": GROK_MODEL,
             "kira_fast": KIRA_FLASH_MODEL,
             "kira_pro": KIRA_PRO_MODEL,
@@ -803,7 +871,8 @@ def health_check():
         },
         "features": {
             "chat": True,
-            "live_voice": GENAI_AVAILABLE and bool(keys),
+            "live_voice": bool(GROQ_API_KEY),
+            "groq_whisper": bool(GROQ_API_KEY),
             "attachments": GENAI_AVAILABLE and bool(keys),
             "image_generation": bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN),
             "video_generation": bool(JSON2VIDEO_API_KEY and CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN) or bool(FAL_KEY and ENABLE_FAL_VIDEO),
