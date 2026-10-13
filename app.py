@@ -55,6 +55,10 @@ CLOUDFLARE_API_TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
 CLOUDFLARE_IMAGE_MODEL = os.environ.get(
     "CLOUDFLARE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell"
 ).strip()
+# JSON2Video renders compositions; Beast AI uses it for a short animated
+# still-image clip (Cloudflare-generated image + zoom + caption), not native
+# AI-generated motion. Store this key only in hosting environment variables.
+JSON2VIDEO_API_KEY = os.environ.get("JSON2VIDEO_API_KEY", "").strip()
 
 # fal.ai is retained for optional video generation only. Leave ENABLE_FAL_VIDEO
 # unset for the free image-only configuration; set it to true only if video
@@ -282,11 +286,9 @@ def _cloudflare_image_bytes(prompt: str) -> tuple[bytes, str]:
 
     model_path = urllib.parse.quote(CLOUDFLARE_IMAGE_MODEL, safe="@/")
     endpoint = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/{model_path}"
-    payload = {
-        "prompt": clean_prompt,
-        "steps": 4,
-        "seed": random.randint(1, 2_147_483_647),
-    }
+    # FLUX.1 Schnell REST schema rejects `seed` in this account/API schema.
+    # Keep only documented request fields.
+    payload = {"prompt": clean_prompt, "steps": 4}
     req = urllib.request.Request(
         endpoint,
         data=json.dumps(payload).encode("utf-8"),
@@ -387,6 +389,186 @@ def cloudflare_media_image():
         app.logger.exception("Cloudflare Workers AI image generation failed")
         message = _provider_error(exc, "Cloudflare Workers AI") if isinstance(exc, (urllib.error.HTTPError, urllib.error.URLError)) else str(exc)
         return app.response_class(_image_error_svg(message), status=200, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
+def _json2video_http_json(url: str, method: str = "GET", payload: dict[str, Any] | None = None, timeout: int = 30) -> dict[str, Any]:
+    """Call the JSON2Video API using its x-api-key header."""
+    if not JSON2VIDEO_API_KEY:
+        raise RuntimeError("Add JSON2VIDEO_API_KEY in the hosting environment to enable video rendering. 🔑")
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    headers = {
+        "x-api-key": JSON2VIDEO_API_KEY,
+        "Accept": "application/json",
+        "User-Agent": USER_AGENT,
+    }
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        raw = response.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"JSON2Video returned non-JSON response (HTTP {response.status}).") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("JSON2Video returned an unexpected response format.")
+        if parsed.get("success") is False:
+            raise RuntimeError(str(parsed.get("message") or parsed.get("error") or "JSON2Video request failed.")[:900])
+        return parsed
+
+
+def _start_json2video_clip(prompt: str, mode: str):
+    """Build a short video clip using a generated still image, zoom keyframes and a caption.
+
+    JSON2Video is a rendering/composition API, not a text-to-video AI model. This
+    path explicitly creates an animated still clip; it does not invent motion frames.
+    """
+    if not JSON2VIDEO_API_KEY:
+        return jsonify({
+            "reply": "Video rendering is not configured. Add JSON2VIDEO_API_KEY to Vercel and Render, then redeploy. 🎬",
+            "error": True,
+        }), 200
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
+        return jsonify({
+            "reply": "This free video-rendering workflow first creates a key image. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN as well as JSON2VIDEO_API_KEY. 🔑",
+            "error": True,
+        }), 200
+    clean_prompt = prompt.strip()[:1600]
+    if not clean_prompt:
+        return jsonify({"reply": "Describe the clip you want to create. 🎬", "error": True}), 200
+    try:
+        image_prompt = (
+            clean_prompt + ". Single cinematic establishing frame, landscape 16:9 composition, "
+            "no captions, no lettering, no logos, visually detailed."
+        )[:2048]
+        image_bytes, mime_type = _cloudflare_image_bytes(image_prompt)
+        extension = "png" if "png" in mime_type else "jpg"
+        filename = f"beast-ai-{int(time.time())}-{random.randint(1000, 999999)}.{extension}"
+        media_meta = _json2video_http_json(
+            "https://api.json2video.com/v2/media/file",
+            method="POST",
+            payload={
+                "name": filename,
+                "contentType": mime_type,
+                "size": len(image_bytes),
+                "folder": "temp",
+            },
+            timeout=25,
+        )
+        upload_url = media_meta.get("uploadUrl")
+        file_url = media_meta.get("fileUrl")
+        if not isinstance(upload_url, str) or not upload_url.startswith("https://") or not isinstance(file_url, str) or not file_url.startswith("https://"):
+            raise RuntimeError("JSON2Video did not return usable uploadUrl and fileUrl values.")
+        put_req = urllib.request.Request(
+            upload_url,
+            data=image_bytes,
+            headers={"Content-Type": mime_type, "User-Agent": USER_AGENT},
+            method="PUT",
+        )
+        with urllib.request.urlopen(put_req, timeout=35) as put_response:
+            if put_response.status not in (200, 201, 204):
+                raise RuntimeError(f"JSON2Video media upload failed (HTTP {put_response.status}).")
+
+        duration = 4 if mode == "video-fast" else 6
+        caption = clean_prompt[:105]
+        movie = {
+            "resolution": "hd",
+            "fps": 25,
+            "cache": False,
+            "client-data": {"app": "Beast AI", "kind": "animated-still-clip", "mode": mode},
+            "scenes": [{
+                "duration": duration,
+                "background-color": "#080808",
+                "elements": [
+                    {
+                        "type": "image",
+                        "src": file_url,
+                        "duration": duration,
+                        "resize": "cover",
+                        "keyframes": [
+                            {"time": 0, "zoom": 0},
+                            {"time": duration, "zoom": 1, "easing": "ease-in-out-sine"},
+                        ],
+                    },
+                    {
+                        "type": "text",
+                        "text": caption,
+                        "duration": duration,
+                        "settings": {
+                            "font-family": "Montserrat",
+                            "font-size": "34px",
+                            "font-weight": "700",
+                            "color": "#FFFFFF",
+                            "text-align": "center",
+                            "vertical-position": "bottom",
+                            "horizontal-position": "center",
+                            "padding": "24px",
+                            "text-shadow": "2px 2px 8px rgba(0,0,0,0.8)",
+                        },
+                    },
+                ],
+            }],
+        }
+        submitted = _json2video_http_json(
+            "https://api.json2video.com/v2/movies",
+            method="POST",
+            payload=movie,
+            timeout=25,
+        )
+        project_id = submitted.get("project")
+        if not isinstance(project_id, str) or not project_id.strip():
+            raise RuntimeError("JSON2Video did not return a render project ID.")
+        return jsonify({
+            "media_pending": True,
+            "request_id": project_id,
+            "provider": "JSON2Video",
+            "mode": mode,
+            "media_type": "video",
+            "reply": "Your clip is rendering: a Cloudflare-generated image with a slow zoom and caption. JSON2Video renders the clip; it does not generate new motion from the prompt. 🎬",
+        }), 202
+    except Exception as exc:
+        app.logger.exception("JSON2Video clip submission failed")
+        detail = _provider_error(exc, "JSON2Video") if isinstance(exc, (urllib.error.HTTPError, urllib.error.URLError)) else str(exc)
+        return jsonify({"reply": f"Video rendering failed: {detail[:900]} ⚠️", "error": True}), 200
+
+
+def _poll_json2video_clip(project_id: str):
+    if not JSON2VIDEO_API_KEY:
+        return jsonify({"reply": "JSON2VIDEO_API_KEY is missing from the hosting environment. 🔑", "error": True}), 200
+    if not isinstance(project_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", project_id):
+        return jsonify({"reply": "The JSON2Video project ID is invalid. Start a new clip. ⚠️", "error": True}), 400
+    try:
+        encoded_id = urllib.parse.quote(project_id, safe="")
+        status_data = _json2video_http_json(
+            f"https://api.json2video.com/v2/movies?project={encoded_id}&format=simple",
+            method="GET",
+            timeout=20,
+        )
+        movie = status_data.get("movie") if isinstance(status_data.get("movie"), dict) else {}
+        status = str(movie.get("status", "pending")).lower()
+        if status == "done":
+            video_url = movie.get("url")
+            if isinstance(video_url, str) and video_url.startswith("https://"):
+                return _media_response(
+                    "video", video_url, "JSON2Video",
+                    "🎬 This is a short animated clip made from a generated still image (zoom + caption), not frame-by-frame AI text-to-video.",
+                )
+            return jsonify({"reply": "JSON2Video completed the render but returned no video URL. ⚠️", "error": True}), 200
+        if status in {"error", "timeout"}:
+            detail = movie.get("message") or f"JSON2Video render status: {status}"
+            return jsonify({"reply": f"JSON2Video render failed: {str(detail)[:900]} ⚠️", "error": True}), 200
+        return jsonify({
+            "media_pending": True,
+            "request_id": project_id,
+            "provider": "JSON2Video",
+            "mode": "video",
+            "media_type": "video",
+            "queue_status": status,
+            "reply": "Rendering your clip… 🎬",
+        }), 200
+    except Exception as exc:
+        detail = _provider_error(exc, "JSON2Video status") if isinstance(exc, (urllib.error.HTTPError, urllib.error.URLError)) else str(exc)
+        return jsonify({"reply": f"Could not check JSON2Video status: {detail[:900]} ⚠️", "error": True}), 200
 
 
 def _fal_http_json(url: str, method: str = "GET", payload: dict[str, Any] | None = None, timeout: int = 20) -> dict[str, Any]:
@@ -490,7 +672,7 @@ def _poll_fal_media_job(mode: str, request_id: str):
         if status in {"FAILED", "ERROR", "CANCELLED"}:
             detail = status_payload.get("error") or status_payload.get("detail") or "The provider failed to generate this media."
             return jsonify({"reply": f"fal.ai generation failed ({status}): {str(detail)[:900]} ⚠️", "error": True}), 200
-        return jsonify({"media_pending": True, "queue_status": status or "IN_QUEUE"}), 200
+        return jsonify({"media_pending": True, "queue_status": status or "IN_QUEUE", "provider": "fal.ai", "request_id": request_id, "mode": mode}), 200
     except Exception as exc:
         return jsonify({"reply": _provider_error(exc, "fal.ai media status"), "error": True}), 200
 
@@ -624,8 +806,9 @@ def health_check():
             "live_voice": GENAI_AVAILABLE and bool(keys),
             "attachments": GENAI_AVAILABLE and bool(keys),
             "image_generation": bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN),
-            "video_generation": bool(FAL_KEY and ENABLE_FAL_VIDEO),
-            "video_generation_fast": bool(FAL_KEY and ENABLE_FAL_VIDEO),
+            "video_generation": bool(JSON2VIDEO_API_KEY and CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN) or bool(FAL_KEY and ENABLE_FAL_VIDEO),
+            "video_generation_fast": bool(JSON2VIDEO_API_KEY and CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN) or bool(FAL_KEY and ENABLE_FAL_VIDEO),
+            "json2video_configured": bool(JSON2VIDEO_API_KEY),
             "kira_pro_chat": bool(os.environ.get("KIRA_PRO_API_KEY")),
         },
     }), 200
@@ -642,6 +825,9 @@ def media_status():
     body = _json_request_body()
     mode = body.get("mode", "image")
     request_id = body.get("request_id", "")
+    provider = str(body.get("provider", "")).strip().lower()
+    if provider in {"json2video", "json2video api"}:
+        return _poll_json2video_clip(request_id)
     return _poll_fal_media_job(mode, request_id)
 
 
@@ -683,11 +869,15 @@ def chat():
             return _start_cloudflare_image(message)
         if mode in {"video", "video-fast"}:
             if not message:
-                return jsonify({"reply": "Describe the video you want to generate. 🎬"}), 200
+                return jsonify({"reply": "Describe the video clip you want to create. 🎬"}), 200
+            # Prefer JSON2Video when configured: it renders a short animated still
+            # clip from Cloudflare-generated key art. Use fal only when explicitly enabled.
+            if JSON2VIDEO_API_KEY:
+                return _start_json2video_clip(message, mode)
             if ENABLE_FAL_VIDEO and FAL_KEY:
                 return _start_fal_media_job(message, mode)
             return jsonify({
-                "reply": "Free Cloudflare Workers AI image generation is enabled, but this model does not generate videos. Video generation needs a separate video provider with available credits or a self-hosted video model. No paid video request was sent. 🎬",
+                "reply": "No video provider is configured. For the free animated-still workflow, add JSON2VIDEO_API_KEY and keep Cloudflare image-generation credentials configured. JSON2Video renders clips from images/text; it is not a prompt-to-video AI model. 🎬",
                 "error": True,
             }), 200
 
