@@ -198,11 +198,7 @@
                         <i data-lucide="plus" id="plus-icon" class="w-5 h-5 transition-transform duration-300"></i>
                     </button>
                     <div id="attach-dropdown-menu" class="absolute bottom-[calc(100%+0.8rem)] left-0 w-[230px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden flex-col transform origin-bottom-left transition-all p-1.5">
-                        <button onclick="setGenMode('chat'); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
-                            <i data-lucide="message-circle" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
-                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Normal chat</span>
-                        </button>
-                        <button onclick="document.getElementById('file-input').click(); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
+<button onclick="document.getElementById('file-input').click(); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
                             <i data-lucide="upload" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
                             <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Upload file</span>
                         </button>
@@ -253,7 +249,7 @@
                         </div>
                     </div>
                     <button id="mic-btn" onclick="toggleMic()" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0" title="Dictate a message"><i data-lucide="mic" class="w-5 h-5"></i></button>
-                    <button id="live-btn" onclick="startGeminiLive()" class="hidden w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-95 flex-shrink-0" title="Start a live voice conversation" aria-label="Start live voice conversation"><i data-lucide="audio-lines" class="w-4 h-4"></i></button>
+                    <button id="live-btn" onclick="startGroqLive()" class="hidden w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-95 flex-shrink-0" title="Start a live voice conversation" aria-label="Start live voice conversation"><i data-lucide="audio-lines" class="w-4 h-4"></i></button>
                     <button id="send-btn" onclick="sendMessage()" class="hidden w-9 h-9 sm:w-10 sm:h-10 items-center justify-center bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm flex-shrink-0"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
                 </div>
             </div>
@@ -270,11 +266,11 @@
                 
             </div>
             <div id="live-transcript" class="px-5 py-5 sm:px-6 flex-1 overflow-y-auto min-h-[180px] space-y-3 custom-scrollbar" aria-live="polite">
-                <p id="live-empty-state" class="text-center text-sm text-zinc-400 py-10">Start talking whenever you're ready. Beast AI will listen and reply aloud. 🎙️</p>
+                <p id="live-empty-state" class="text-center text-sm text-zinc-400 py-10">Speak, then tap Finish speaking. Beast AI will transcribe your voice and reply aloud. 🎙️</p>
             </div>
             <div class="px-5 py-4 sm:px-6 border-t border-black/5 dark:border-white/10 flex items-center justify-between gap-4">
                 <p class="text-xs text-zinc-500 dark:text-zinc-400">Use headphones to reduce echo.</p>
-                <button id="live-end-btn" onclick="stopGeminiLive(false)" class="px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors"><i data-lucide="phone-off" class="w-4 h-4 inline-block mr-1.5"></i>End live</button>
+                <button id="live-end-btn" onclick="stopGroqLive()" class="px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors"><i data-lucide="phone-off" class="w-4 h-4 inline-block mr-1.5"></i>Finish speaking</button>
             </div>
         </div>
     </div>
@@ -284,10 +280,7 @@
         let currentMode = 'chat'; let currentSpeed = 'normal'; let attachedFiles = []; let currentSessionId = null;
         let userName = localStorage.getItem('beast-username'); let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
         let freshChatLiveEligible = true;
-        let liveStarting = false, liveActive = false, liveHasConnected = false;
-        let liveSocket = null, liveStream = null, liveAudioContext = null, liveMicSource = null, liveProcessor = null, liveMutedOutput = null, liveSetupTimeout = null;
-        let liveNextPlayTime = 0, livePlayingSources = new Set(), liveTranscriptEntries = [], liveLastTranscriptEntry = null, liveLastTranscriptRole = null;
-        let liveCreatedSessionId = null;
+
 
         function escapeHTML(value) {
             return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[ch]));
@@ -464,28 +457,22 @@
             lucide.createIcons(); initDesktopSidebar(); loadHistory(); initName(); checkInput(); updateLiveButtonVisibility();
         };
 
-        // Gemini Live API: browser microphone -> PCM stream -> Gemini, with streamed audio playback.
-        const LIVE_MODEL_FALLBACK = 'gemini-3.8-live';
-        const LIVE_SYSTEM_INSTRUCTION = 'You are Beast AI, a friendly, helpful real-time voice assistant. Beast AI was created by Chiranth when he was in 8th grade. If asked who created you, answer simply and accurately. Speak naturally, keep answers concise, allow the user to interrupt, and never claim to have performed an action you did not perform.';
+        // Groq Whisper voice mode: record one spoken turn, transcribe it server-side,
+        // send the transcript through the existing Beast chat, and speak the reply with browser TTS.
+        const LIVE_TRANSCRIBE_ENDPOINT = "https://beast-ai-v2.onrender.com/api/live/transcribe";
+        let liveStarting = false, liveActive = false, liveProcessing = false;
+        let liveRecorder = null, liveStream = null, liveChunks = [], liveStopTimer = null, liveGeneration = 0;
+        let liveTranscriptEntries = [], liveLastTranscriptEntry = null, liveLastTranscriptRole = null;
+        let lastSentReplyText = '';
 
         function setLiveStatus(text) {
             const status = document.getElementById('live-status');
             if (status) status.textContent = text;
         }
 
-        function commitLiveSession() {
-            if (currentSessionId) return;
-            currentSessionId = 'BeastSession_' + Date.now();
-            liveCreatedSessionId = currentSessionId;
-            localStorage.setItem(currentSessionId, JSON.stringify({ pinned: false, title: 'Live voice conversation', messages: [] }));
-            document.getElementById('welcome-box').style.display = 'none';
-            document.getElementById('chat-box').classList.replace('hidden', 'flex');
-            loadHistory();
-        }
-
         function showLiveTranscriptPlaceholder() {
             const target = document.getElementById('live-transcript');
-            target.innerHTML = '<p id="live-empty-state" class="text-center text-sm text-zinc-400 py-10">Start talking whenever you\'re ready. Beast AI will listen and reply aloud. 🎙️</p>';
+            target.innerHTML = '<p id="live-empty-state" class="text-center text-sm text-zinc-400 py-10">Speak naturally, then tap Finish speaking. Beast AI will transcribe your voice and reply aloud. 🎙️</p>';
             liveTranscriptEntries = []; liveLastTranscriptEntry = null; liveLastTranscriptRole = null;
         }
 
@@ -495,13 +482,6 @@
             const target = document.getElementById('live-transcript');
             const empty = document.getElementById('live-empty-state');
             if (empty) empty.remove();
-            let entry = liveLastTranscriptEntry;
-            if (entry && liveLastTranscriptRole === role) {
-                if (text === entry.text || entry.text.endsWith(text) || entry.text.startsWith(text)) return;
-                entry.text = entry.text + ' ' + text;
-                entry.body.textContent = entry.text;
-                return;
-            }
             const row = document.createElement('div');
             row.className = role === 'user' ? 'ml-auto max-w-[90%] rounded-2xl rounded-tr-sm bg-indigo-50 dark:bg-indigo-950/50 px-4 py-3' : 'mr-auto max-w-[90%] rounded-2xl rounded-tl-sm bg-zinc-100 dark:bg-zinc-800 px-4 py-3';
             const label = document.createElement('div');
@@ -510,201 +490,126 @@
             const body = document.createElement('div');
             body.className = 'text-sm leading-relaxed whitespace-pre-wrap break-words'; body.textContent = text;
             row.append(label, body); target.appendChild(row); target.scrollTop = target.scrollHeight;
-            entry = { role, text, body }; liveTranscriptEntries.push(entry); liveLastTranscriptEntry = entry; liveLastTranscriptRole = role;
+            liveTranscriptEntries.push({ role, text }); liveLastTranscriptEntry = { role, text, body }; liveLastTranscriptRole = role;
         }
 
-        function base64ToBytes(value) {
-            const binary = atob(value); const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            return bytes;
+        function closeGroqLiveOverlay() {
+            liveGeneration += 1;
+            if (liveRecorder && liveRecorder.state === 'recording') { liveRecorder.onstop = null; try { liveRecorder.stop(); } catch (_) {} }
+            const overlay = document.getElementById('live-overlay');
+            overlay.classList.add('hidden'); overlay.classList.remove('flex');
+            if (liveStopTimer) { clearTimeout(liveStopTimer); liveStopTimer = null; }
+            if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
+            liveRecorder = null; liveChunks = []; liveStarting = false; liveActive = false; liveProcessing = false;
+            const btn = document.getElementById('live-end-btn');
+            btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = 'Finish speaking'; btn.onclick = stopGroqLive;
+            if (!currentSessionId) freshChatLiveEligible = true;
+            checkInput(); updateLiveButtonVisibility();
         }
 
-        function floatToPcm16Base64(input, inputRate) {
-            const targetRate = 16000;
-            const ratio = inputRate / targetRate;
-            const outLength = Math.max(1, Math.floor(input.length / ratio));
-            const pcm = new Int16Array(outLength);
-            for (let i = 0; i < outLength; i++) {
-                const start = Math.floor(i * ratio);
-                const end = Math.min(input.length, Math.floor((i + 1) * ratio));
-                let sum = 0, count = 0;
-                for (let j = start; j < Math.max(start + 1, end); j++) { sum += input[Math.min(j, input.length - 1)]; count++; }
-                const sample = Math.max(-1, Math.min(1, sum / Math.max(1, count)));
-                pcm[i] = sample < 0 ? sample * 32768 : sample * 32767;
+        async function startGroqLive() {
+            if (liveStarting || liveActive || liveProcessing || !freshChatLiveEligible || currentSessionId || currentMode !== 'chat') return;
+            if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+                alert('Voice mode needs a supported browser and a secure HTTPS page. Try Chrome. 🎙️'); return;
             }
-            const bytes = new Uint8Array(pcm.buffer); let binary = '';
-            const block = 0x8000;
-            for (let i = 0; i < bytes.length; i += block) binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + block, bytes.length)));
-            return btoa(binary);
-        }
-
-        function beginLiveMicrophone() {
-            const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            if (!AudioCtx) throw new Error('This browser does not support live audio. Try a recent version of Chrome.');
-            if (!liveAudioContext) liveAudioContext = new AudioCtx();
-            liveAudioContext.resume().catch(() => {});
-            liveMicSource = liveAudioContext.createMediaStreamSource(liveStream);
-            liveProcessor = liveAudioContext.createScriptProcessor(2048, 1, 1);
-            liveMutedOutput = liveAudioContext.createGain(); liveMutedOutput.gain.value = 0;
-            liveProcessor.onaudioprocess = (event) => {
-                if (!liveActive || !liveSocket || liveSocket.readyState !== WebSocket.OPEN || !liveAudioContext) return;
-                try {
-                    const audio = floatToPcm16Base64(event.inputBuffer.getChannelData(0), liveAudioContext.sampleRate);
-                    liveSocket.send(JSON.stringify({ realtimeInput: { audio: { data: audio, mimeType: 'audio/pcm;rate=16000' } } }));
-                } catch (err) { console.warn('Live audio chunk failed:', err); }
-            };
-            liveMicSource.connect(liveProcessor); liveProcessor.connect(liveMutedOutput); liveMutedOutput.connect(liveAudioContext.destination);
-        }
-
-        function stopQueuedLiveAudio() {
-            for (const source of livePlayingSources) { try { source.stop(); } catch (_) {} }
-            livePlayingSources.clear();
-            if (liveAudioContext) liveNextPlayTime = liveAudioContext.currentTime + 0.02;
-        }
-
-        function playLiveAudio(base64, mimeType) {
-            if (!liveAudioContext || !base64) return;
-            const rateMatch = String(mimeType || '').match(/rate=(\d+)/i);
-            const sampleRate = rateMatch ? Number(rateMatch[1]) : 24000;
-            const bytes = base64ToBytes(base64);
-            const count = Math.floor(bytes.length / 2);
-            if (!count) return;
-            const floats = new Float32Array(count);
-            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-            for (let i = 0; i < count; i++) floats[i] = view.getInt16(i * 2, true) / 32768;
-            const buffer = liveAudioContext.createBuffer(1, count, sampleRate);
-            buffer.copyToChannel(floats, 0);
-            const source = liveAudioContext.createBufferSource(); source.buffer = buffer; source.connect(liveAudioContext.destination);
-            const startAt = Math.max(liveNextPlayTime, liveAudioContext.currentTime + 0.025);
-            source.onended = () => livePlayingSources.delete(source);
-            livePlayingSources.add(source); source.start(startAt); liveNextPlayTime = startAt + buffer.duration;
-        }
-
-        async function startGeminiLive() {
-            if (liveStarting || liveActive || !freshChatLiveEligible || currentSessionId || currentMode !== 'chat') return;
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert('Microphone access requires a secure HTTPS page and a supported browser. 🎙️'); return; }
             liveStarting = true; freshChatLiveEligible = false; updateLiveButtonVisibility();
             showLiveTranscriptPlaceholder();
             const overlay = document.getElementById('live-overlay'); overlay.classList.remove('hidden'); overlay.classList.add('flex');
             setLiveStatus('Requesting microphone access…');
             const endBtn = document.getElementById('live-end-btn'); endBtn.disabled = true; endBtn.classList.add('opacity-60');
+            const generation = ++liveGeneration;
             try {
-                const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                if (!AudioCtx) throw new Error('This browser does not support live audio. Try a recent version of Chrome.');
-                // Create/resume AudioContext immediately from the button gesture to satisfy browser audio policies.
-                liveAudioContext = new AudioCtx();
-                await liveAudioContext.resume();
                 liveStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-                setLiveStatus('Securing a short-lived Gemini Live token…');
-                const tokenResponse = await fetch('https://beast-ai-v2.onrender.com/api/live/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-                const tokenData = await tokenResponse.json().catch(() => ({}));
-                if (!tokenResponse.ok || !tokenData.token) throw new Error(tokenData.error || `Could not create Live token (HTTP ${tokenResponse.status}). Check GEMINI_API_KEY and /api/health.`);
-                const model = tokenData.model || LIVE_MODEL_FALLBACK;
-                const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=' + encodeURIComponent(tokenData.token);
-                liveSocket = new WebSocket(wsUrl);
-                liveSetupTimeout = setTimeout(() => {
-                    if (liveStarting && !liveActive) handleLiveStartFailure(new Error('Gemini Live did not finish connecting in time. Check the model access and deployment logs.'));
-                }, 20000);
-                liveSocket.onopen = () => {
-                    setLiveStatus('Connecting to Gemini Live…');
-                    const systemInstruction = LIVE_SYSTEM_INSTRUCTION;
-                    liveSocket.send(JSON.stringify({ setup: {
-                        model: 'models/' + model,
-                        generationConfig: { responseModalities: ['AUDIO'] },
-                        inputAudioTranscription: {},
-                        outputAudioTranscription: {},
-                        systemInstruction: { parts: [{ text: systemInstruction }] }
-                    } }));
-                };
-                liveSocket.onmessage = (event) => {
-                    let response;
-                    try { response = JSON.parse(event.data); } catch (_) { return; }
-                    if (response.error) { setLiveStatus('Live error: ' + (response.error.message || 'Gemini rejected the session.')); return; }
-                    if (response.setupComplete) {
-                        if (liveSetupTimeout) { clearTimeout(liveSetupTimeout); liveSetupTimeout = null; }
-                        try {
-                            beginLiveMicrophone();
-                            liveStarting = false; liveActive = true; liveHasConnected = true;
-                            commitLiveSession();
-                            setLiveStatus('Listening… speak naturally.');
-                            endBtn.disabled = false; endBtn.classList.remove('opacity-60');
-                            updateLiveButtonVisibility();
-                        } catch (err) { handleLiveStartFailure(err); }
-                        return;
-                    }
-                    const server = response.serverContent || {};
-                    if (server.interrupted) { stopQueuedLiveAudio(); setLiveStatus('Listening…'); }
-                    if (server.inputTranscription && server.inputTranscription.text) addLiveTranscript('user', server.inputTranscription.text);
-                    if (server.outputTranscription && server.outputTranscription.text) addLiveTranscript('beast', server.outputTranscription.text);
-                    const parts = server.modelTurn && Array.isArray(server.modelTurn.parts) ? server.modelTurn.parts : [];
-                    for (const part of parts) {
-                        if (part.inlineData && part.inlineData.data && String(part.inlineData.mimeType || '').startsWith('audio/pcm')) playLiveAudio(part.inlineData.data, part.inlineData.mimeType);
-                        if (part.text && !(server.outputTranscription && server.outputTranscription.text)) addLiveTranscript('beast', part.text);
-                    }
-                    if (server.turnComplete) setLiveStatus('Listening… speak whenever you like.');
-                };
-                liveSocket.onerror = () => {
-                    if (liveStarting && !liveActive) handleLiveStartFailure(new Error('The Live connection failed. Check that your Gemini API key has Live API access.'));
-                    else setLiveStatus('The Live connection encountered an error. You can end this session and try again.');
-                };
-                liveSocket.onclose = (event) => {
-                    if (liveStarting && !liveActive) handleLiveStartFailure(new Error(event.reason || 'Gemini Live disconnected before setup completed.'));
-                    else if (liveActive) { setLiveStatus(event.reason ? 'Live disconnected: ' + event.reason : 'Live session disconnected.'); stopGeminiLive(true); }
-                };
+                const mimeOptions = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+                const mimeType = mimeOptions.find(type => MediaRecorder.isTypeSupported(type)) || '';
+                liveRecorder = mimeType ? new MediaRecorder(liveStream, { mimeType }) : new MediaRecorder(liveStream);
+                liveChunks = [];
+                liveRecorder.ondataavailable = event => { if (event.data && event.data.size) liveChunks.push(event.data); };
+                liveRecorder.onerror = event => { setLiveStatus('Microphone recording failed. Please try again.'); console.error('MediaRecorder error:', event.error); };
+                liveRecorder.onstop = () => processGroqRecording(generation);
+                liveRecorder.start(1000);
+                liveStarting = false; liveActive = true;
+                endBtn.disabled = false; endBtn.classList.remove('opacity-60'); endBtn.textContent = 'Finish speaking'; endBtn.onclick = stopGroqLive;
+                setLiveStatus('Listening… finish your sentence and tap Finish speaking.');
+                // Vercel serverless request limits make shorter voice turns more reliable.
+                liveStopTimer = setTimeout(() => { if (liveRecorder && liveRecorder.state === 'recording') stopGroqLive(); }, 45000);
             } catch (error) {
-                handleLiveStartFailure(error);
+                console.error('Groq voice recording could not start:', error);
+                setLiveStatus(error?.message || 'Could not access the microphone.');
+                liveStarting = false; liveActive = false;
+                if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
+                const btn = document.getElementById('live-end-btn'); btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = 'Close'; btn.onclick = closeGroqLiveOverlay;
+                freshChatLiveEligible = true; updateLiveButtonVisibility();
             }
         }
 
-        function handleLiveStartFailure(error) {
-            if (liveSetupTimeout) { clearTimeout(liveSetupTimeout); liveSetupTimeout = null; }
-            console.error('Gemini Live could not start:', error);
-            setLiveStatus(error && error.message ? error.message : 'Could not start Gemini Live.');
-            liveStarting = false; liveActive = false;
-            if (liveSocket) { try { liveSocket.close(); } catch (_) {} liveSocket = null; }
-            if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
-            if (liveAudioContext) { liveAudioContext.close().catch(() => {}); liveAudioContext = null; }
-            freshChatLiveEligible = true; updateLiveButtonVisibility();
-            const endBtn = document.getElementById('live-end-btn'); endBtn.disabled = false; endBtn.classList.remove('opacity-60');
+        function stopGroqLive() {
+            if (liveStopTimer) { clearTimeout(liveStopTimer); liveStopTimer = null; }
+            if (!liveRecorder || liveRecorder.state !== 'recording') {
+                if (!liveProcessing) closeGroqLiveOverlay();
+                return;
+            }
+            liveActive = false; liveProcessing = true;
+            setLiveStatus('Sending audio to Groq Whisper for transcription…');
+            const btn = document.getElementById('live-end-btn'); btn.disabled = true; btn.classList.add('opacity-60'); btn.textContent = 'Processing…';
+            try { liveRecorder.stop(); } catch (error) { liveProcessing = false; closeGroqLiveOverlay(); alert('Could not stop the recording. Please retry. 🎙️'); }
         }
 
-        async function stopGeminiLive(silent) {
-            if (liveSetupTimeout) { clearTimeout(liveSetupTimeout); liveSetupTimeout = null; }
-            const wasConnected = liveHasConnected;
-            liveStarting = false; liveActive = false;
-            if (liveProcessor) { liveProcessor.onaudioprocess = null; try { liveProcessor.disconnect(); } catch (_) {} liveProcessor = null; }
-            if (liveMicSource) { try { liveMicSource.disconnect(); } catch (_) {} liveMicSource = null; }
-            if (liveMutedOutput) { try { liveMutedOutput.disconnect(); } catch (_) {} liveMutedOutput = null; }
-            if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
-            stopQueuedLiveAudio();
-            if (liveSocket) { try { if (liveSocket.readyState === WebSocket.OPEN) liveSocket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } })); liveSocket.close(); } catch (_) {} liveSocket = null; }
-            if (liveAudioContext) { try { await liveAudioContext.close(); } catch (_) {} liveAudioContext = null; }
-            const overlay = document.getElementById('live-overlay'); overlay.classList.add('hidden'); overlay.classList.remove('flex');
-
-            const entries = liveTranscriptEntries.map(entry => ({ role: entry.role, text: entry.text.trim() })).filter(entry => entry.text);
-            if (wasConnected && entries.length > 0 && currentSessionId) {
-                const session = JSON.parse(localStorage.getItem(currentSessionId)) || { pinned: false, title: 'Live voice conversation', messages: [] };
-                for (const item of entries) {
-                    let text = item.text;
-                    if (item.role === 'beast' && !/[\u{1F000}-\u{1FAFF}\u2600-\u27BF]/u.test(text)) text += ' 🙂';
-                    const msg = { type: item.role === 'user' ? 'user' : 'beast', message: text };
-                    session.messages.push(msg); appendHistoryMessage(msg);
+        async function processGroqRecording(generation) {
+            try {
+                if (generation !== liveGeneration) return;
+                if (liveStopTimer) { clearTimeout(liveStopTimer); liveStopTimer = null; }
+                const recorder = liveRecorder;
+                const mimeType = recorder?.mimeType || liveChunks[0]?.type || 'audio/webm';
+                const extension = mimeType.includes('ogg') ? 'ogg' : (mimeType.includes('mp4') ? 'mp4' : 'webm');
+                const blob = new Blob(liveChunks, { type: mimeType });
+                if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
+                liveRecorder = null; liveChunks = [];
+                if (!blob.size) throw new Error('No audio was recorded. Please try again.');
+                setLiveStatus('Transcribing your voice…');
+                const form = new FormData();
+                form.append('audio', blob, `beast-voice.${extension}`);
+                const response = await fetch(LIVE_TRANSCRIBE_ENDPOINT, { method: 'POST', body: form });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.text) throw new Error(data.error || `Groq Whisper failed (HTTP ${response.status}). Check GROQ_API_KEY and /api/health.`);
+                if (generation !== liveGeneration) return;
+                const transcript = String(data.text).trim();
+                if (!transcript) throw new Error('Groq Whisper did not detect speech. Please speak more clearly and retry.');
+                addLiveTranscript('user', transcript);
+                setLiveStatus('Beast AI is preparing a reply…');
+                const input = document.getElementById('user-input');
+                input.value = transcript;
+                currentMode = 'chat';
+                checkInput();
+                // Use the regular chat route, model selector, creator rule, and history logic.
+                const overlay = document.getElementById('live-overlay'); overlay.classList.add('hidden'); overlay.classList.remove('flex');
+                if (generation !== liveGeneration) return;
+                liveProcessing = false;
+                const reply = await sendMessage();
+                if (reply && 'speechSynthesis' in window) {
+                    const spoken = String(reply).replace(/```[\s\S]*?```/g, ' code block omitted ').replace(/<[^>]*>/g, ' ').replace(/[#*_`>]/g, ' ').replace(/https?:\/\/\S+/g, ' link ').slice(0, 1800).trim();
+                    if (spoken) {
+                        window.speechSynthesis.cancel();
+                        const utterance = new SpeechSynthesisUtterance(spoken);
+                        utterance.lang = 'en-IN'; utterance.rate = 1; utterance.pitch = 1;
+                        window.speechSynthesis.speak(utterance);
+                    }
                 }
-                if (session.messages.length) session.title = session.messages.find(m => m.type === 'user')?.message?.slice(0, 52) || 'Live voice conversation';
-                localStorage.setItem(currentSessionId, JSON.stringify(session));
-                document.getElementById('welcome-box').style.display = 'none';
-                document.getElementById('chat-box').classList.replace('hidden', 'flex');
-                loadHistory();
-            } else if (liveCreatedSessionId && currentSessionId === liveCreatedSessionId) {
-                localStorage.removeItem(liveCreatedSessionId); currentSessionId = null; freshChatLiveEligible = true;
-                document.getElementById('chat-box').innerHTML = ''; document.getElementById('chat-box').classList.replace('flex', 'hidden');
-                document.getElementById('welcome-box').style.display = 'flex';
+            } catch (error) {
+                if (generation !== liveGeneration) return;
+                console.error('Groq Whisper voice round-trip failed:', error);
+                setLiveStatus(error?.message || 'Voice transcription failed.');
+                const overlay = document.getElementById('live-overlay'); overlay.classList.remove('hidden'); overlay.classList.add('flex');
+                const btn = document.getElementById('live-end-btn'); btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = 'Close'; btn.onclick = closeGroqLiveOverlay;
+                if (!currentSessionId) freshChatLiveEligible = true;
+            } finally {
+                if (generation === liveGeneration) {
+                    if (liveProcessing) liveProcessing = false;
+                    liveStarting = false; liveActive = false;
+                    if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
+                    updateLiveButtonVisibility();
+                }
             }
-            liveCreatedSessionId = null; liveHasConnected = false; liveTranscriptEntries = []; liveLastTranscriptEntry = null; liveLastTranscriptRole = null;
-            if (!wasConnected && !silent) freshChatLiveEligible = true;
-            if (silent && !currentSessionId) freshChatLiveEligible = true;
-            checkInput(); updateLiveButtonVisibility();
-            if (!silent && wasConnected) document.getElementById('user-input').focus();
         }
 
         function initName() { if (!userName) { document.getElementById('name-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('name-input').focus(), 100); } else { setGreeting(); } }
@@ -735,7 +640,7 @@
             loadHistory(); checkInput(); updateLiveButtonVisibility();
         }
         function startNewChat() {
-            if (liveActive || liveStarting) stopGeminiLive(true);
+            if (liveActive || liveStarting || liveProcessing) closeGroqLiveOverlay();
             currentSessionId = null; freshChatLiveEligible = true; currentMode = 'chat';
             document.getElementById('user-input').value = ''; document.getElementById('user-input').placeholder = 'Ask Beast...';
             clearAllAttachments();
@@ -771,6 +676,7 @@
         }
 
         async function sendMessage() {
+            lastSentReplyText = "";
             const input = document.getElementById('user-input'); const msg = input.value.trim();
             if (!msg && attachedFiles.length === 0) return;
             
@@ -833,6 +739,7 @@
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
                 const targetBox = targetBoxWrap.querySelector('.prose');
                 let replyText = responseToDisplayText(data, currentMode) || "The backend returned an empty response.";
+                lastSentReplyText = replyText;
                 
                 loader.style.display = 'none'; 
                 targetBoxWrap.classList.remove('hidden'); 
@@ -850,7 +757,8 @@
                 document.getElementById(`loader-${msgId}`).style.display = 'none'; 
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
                 targetBoxWrap.classList.remove('hidden'); 
-                targetBoxWrap.querySelector('.prose').innerHTML = renderMarkdown(`Connection error: ${e && e.message ? e.message : "request failed"}. Check /api/health and the deployment logs.`); 
+                lastSentReplyText = `Connection error: ${e && e.message ? e.message : "request failed"}. Check /api/health and the deployment logs.`;
+                targetBoxWrap.querySelector('.prose').innerHTML = renderMarkdown(lastSentReplyText); 
             }
             lucide.createIcons(); 
             document.getElementById('send-btn').disabled = false; 
@@ -858,6 +766,7 @@
             loadHistory();
             currentMode = 'chat'; document.getElementById('user-input').placeholder = "Ask Beast...";
             renderAttachmentPreviews(); checkInput(); updateLiveButtonVisibility();
+            return lastSentReplyText;
         }
 
         function appendHistoryMessage(m) { 
