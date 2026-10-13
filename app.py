@@ -32,11 +32,13 @@ except ImportError:  # Keep health/debug endpoints available if dependency insta
 APP_TARGET = os.environ.get("BEAST_DEPLOYMENT_TARGET", "render").strip().lower()
 IS_VERCEL = APP_TARGET == "vercel"
 MAX_REQUEST_BYTES = 4_300_000 if IS_VERCEL else 20 * 1024 * 1024
-GEMINI_TIMEOUT_MS = 12_000 if IS_VERCEL else 25_000
-GEMINI_BUDGET_SECONDS = 40 if IS_VERCEL else 90
+# Text requests have a browser-side 55s deadline. Keep each provider attempt bounded
+# and reserve time for model fallback so failed providers do not leave the UI waiting.
+GEMINI_TIMEOUT_MS = 6_000
+GEMINI_BUDGET_SECONDS = 25
 VIDEO_TIMEOUT_SECONDS = 45 if IS_VERCEL else 75
 KIRA_API_BASE_URL = os.environ.get("KIRA_API_BASE_URL", "https://kiraai.vn/api/v1").rstrip("/")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
 GROK_MODEL = os.environ.get("GROK_MODEL", "grok-4.6").strip()
 KIRA_FLASH_MODEL = os.environ.get("KIRA_FLASH_MODEL", "kira-3.5-flash").strip()
 KIRA_PRO_MODEL = os.environ.get("KIRA_PRO_MODEL", "kira-3.5-pro").strip()
@@ -44,6 +46,7 @@ KIRA_PRO_MODEL = os.environ.get("KIRA_PRO_MODEL", "kira-3.5-pro").strip()
 GEMINI_LIVE_MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.8-live").strip() or "gemini-3.8-live"
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
 GROQ_WHISPER_MODEL = os.environ.get("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo").strip() or "whisper-large-v3-turbo"
+GROQ_CHAT_MODEL = os.environ.get("GROQ_CHAT_MODEL", "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b"
 LIVE_SYSTEM_INSTRUCTION = (
     "You are Beast AI, a friendly, helpful real-time voice assistant. "
     "Beast AI was created by Chiranth when he was in 8th grade. If asked who created you, answer simply and accurately. "
@@ -702,46 +705,88 @@ def _openai_compatible_chat(api_url: str, api_key: str, model: str, history: lis
     return content.strip()
 
 
+def _generate_with_groq(message: str, history: list[dict[str, str]], system_prompt: str) -> tuple[str | None, list[str]]:
+    """Fast text-only fallback using the same Groq key as Whisper, when configured."""
+    if not GROQ_API_KEY:
+        return None, []
+    try:
+        text = _openai_compatible_chat(
+            "https://api.groq.com/openai/v1/chat/completions",
+            GROQ_API_KEY, GROQ_CHAT_MODEL, history, message, system_prompt,
+            timeout=8,
+        )
+        return text, []
+    except Exception as exc:
+        return None, [_provider_error(exc, "Groq chat")]
+
+
 def _generate_with_gemini(keys: list[str], message: str, history: list[dict[str, str]], files: list[dict[str, Any]], system_prompt: str, started: float) -> tuple[str | None, list[str]]:
+    """Try the configured Gemini model and current stable fallbacks with hard time limits."""
     errors: list[str] = []
     if not GENAI_AVAILABLE:
         return None, ["Python dependency google-genai is not installed. Re-deploy after installing requirements.txt."]
     if not keys:
         return None, ["No Gemini API key is configured. Add GEMINI_API_KEY (or GEMINI_API_KEY_1 through _9)."]
 
-    keys_to_try = keys[:]
+    # Respect a custom GEMINI_MODEL first, but do not let a bad/overloaded model
+    # block normal chat. These IDs are confirmed in Google's current model guide.
+    model_candidates: list[str] = []
+    for candidate in (GEMINI_MODEL, "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.7-flash"):
+        candidate = str(candidate or "").strip()
+        if candidate and candidate not in model_candidates:
+            model_candidates.append(candidate)
+
+    keys_to_try = list(keys)
     random.shuffle(keys_to_try)
-    for key in keys_to_try:
-        if time.time() - started > GEMINI_BUDGET_SECONDS:
-            errors.append("Gemini key retries stopped to stay within the deployment request timeout.")
+
+    contents = []
+    for item in history:
+        role = "user" if item["role"] == "user" else "model"
+        contents.append(types.Content(role=role, parts=[types.Part.from_text(text=item["text"])]))
+    parts = []
+    if message:
+        parts.append(types.Part.from_text(text=message))
+    for uploaded in files:
+        parts.append(types.Part.from_bytes(data=uploaded["bytes"], mime_type=uploaded["mime_type"]))
+    if parts:
+        contents.append(types.Content(role="user", parts=parts))
+
+    # Prefer trying several models with one key before burning the entire request
+    # window cycling through keys for the same model. Every SDK call is single-shot;
+    # fallback/retry decisions are made here under our own time budget.
+    attempts = [(key, model) for model in model_candidates for key in keys_to_try]
+    timeout_seconds = GEMINI_TIMEOUT_MS / 1000
+    for key, model in attempts:
+        if time.time() - started >= GEMINI_BUDGET_SECONDS - timeout_seconds:
+            errors.append("Gemini fallback budget reached; stopped further attempts so the chat request can finish.")
             break
         try:
-            client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS))
-            contents = []
-            for item in history:
-                role = "user" if item["role"] == "user" else "model"
-                contents.append(types.Content(role=role, parts=[types.Part.from_text(text=item["text"])]))
-            parts = []
-            if message:
-                parts.append(types.Part.from_text(text=message))
-            for uploaded in files:
-                parts.append(types.Part.from_bytes(data=uploaded["bytes"], mime_type=uploaded["mime_type"]))
-            if parts:
-                contents.append(types.Content(role="user", parts=parts))
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(system_instruction=system_prompt),
+            client = genai.Client(
+                api_key=key,
+                http_options=types.HttpOptions(
+                    timeout=GEMINI_TIMEOUT_MS,
+                    retry_options=types.HttpRetryOptions(attempts=1),
+                ),
             )
-            text = response.text
-            if isinstance(text, str) and text.strip():
-                return text.strip(), errors
-            errors.append(f"Gemini model {GEMINI_MODEL} returned no text.")
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    automatic_continuation=False,
+                ),
+            )
+            result_text = response.text
+            if isinstance(result_text, str) and result_text.strip():
+                return result_text.strip(), errors
+            errors.append(f"Gemini model {model} returned no text.")
         except Exception as exc:
             description = str(exc)
             if "safety" in description.lower():
-                return "The request was blocked by Gemini's safety filters.", errors
-            errors.append(f"Gemini: {description[:600]}")
+                return "The request was blocked by Gemini's safety filters. ⚠️", errors
+            # Keep UI/error responses short; detailed provider error is still in server logs.
+            app.logger.warning("Gemini request failed for model %s: %s", model, description[:500])
+            errors.append(f"Gemini model {model}: {description[:350]}")
     return None, errors
 
 
@@ -862,6 +907,7 @@ def health_check():
             "gemini": GEMINI_MODEL,
             "gemini_live": "Groq Whisper transcription + browser speech output",
             "groq_whisper": GROQ_WHISPER_MODEL,
+            "groq_chat": GROQ_CHAT_MODEL,
             "grok": GROK_MODEL,
             "kira_fast": KIRA_FLASH_MODEL,
             "kira_pro": KIRA_PRO_MODEL,
@@ -873,6 +919,7 @@ def health_check():
             "chat": True,
             "live_voice": bool(GROQ_API_KEY),
             "groq_whisper": bool(GROQ_API_KEY),
+            "groq_chat": bool(GROQ_API_KEY),
             "attachments": GENAI_AVAILABLE and bool(keys),
             "image_generation": bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN),
             "video_generation": bool(JSON2VIDEO_API_KEY and CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN) or bool(FAL_KEY and ENABLE_FAL_VIDEO),
@@ -974,7 +1021,7 @@ def chat():
                 try:
                     final_text = _openai_compatible_chat(
                         f"{KIRA_API_BASE_URL}/chat/completions", kira_pro_key, KIRA_PRO_MODEL,
-                        history, message, system_prompt, timeout=20 if IS_VERCEL else 35,
+                        history, message, system_prompt, timeout=8,
                     )
                     used_provider = "Kira Pro"
                 except Exception as exc:
@@ -988,7 +1035,7 @@ def chat():
                 try:
                     final_text = _openai_compatible_chat(
                         "https://api.x.ai/v1/chat/completions", grok_key, GROK_MODEL,
-                        history, message, system_prompt, timeout=20 if IS_VERCEL else 35,
+                        history, message, system_prompt, timeout=8,
                     )
                     used_provider = "Grok"
                 except Exception as exc:
@@ -1002,13 +1049,22 @@ def chat():
                 try:
                     final_text = _openai_compatible_chat(
                         f"{KIRA_API_BASE_URL}/chat/completions", kira_key, KIRA_FLASH_MODEL,
-                        history, message, system_prompt, timeout=20 if IS_VERCEL else 35,
+                        history, message, system_prompt, timeout=8,
                     )
                     used_provider = "Kira Fast"
                 except Exception as exc:
                     errors.append(_provider_error(exc, "Kira Fast"))
             else:
                 errors.append("KIRA_FLASH_API_KEY is not configured; falling back to Gemini.")
+
+        # Normal text chat uses Groq first when its key is present. This avoids making
+        # every ordinary message wait on a temporarily overloaded Gemini endpoint.
+        # Attachments still go to Gemini because this text endpoint cannot inspect files.
+        if not final_text and not uploaded_files and speed == "normal":
+            final_text, groq_errors = _generate_with_groq(message, history, system_prompt)
+            errors.extend(groq_errors)
+            if final_text:
+                used_provider = "Groq"
 
         if not final_text:
             final_text, gemini_errors = _generate_with_gemini(
@@ -1018,6 +1074,13 @@ def chat():
             if final_text:
                 used_provider = "Gemini"
 
+        # Groq is also the next fallback for selected tiers or when Gemini is overloaded.
+        if not final_text and not uploaded_files:
+            final_text, groq_errors = _generate_with_groq(message, history, system_prompt)
+            errors.extend(groq_errors)
+            if final_text:
+                used_provider = "Groq fallback"
+
         # Last-resort text fallback is used only for text-only requests. It cannot inspect attachments.
         if not final_text and not uploaded_files:
             try:
@@ -1025,21 +1088,22 @@ def chat():
                 encoded_system = urllib.parse.quote(system_prompt, safe="")
                 fallback_url = f"https://text.pollinations.ai/{encoded_prompt}?system={encoded_system}"
                 req = urllib.request.Request(fallback_url, headers={"User-Agent": USER_AGENT})
-                with urllib.request.urlopen(req, timeout=12 if IS_VERCEL else 20) as response:
+                with urllib.request.urlopen(req, timeout=5) as response:
                     final_text = response.read().decode("utf-8", errors="replace").strip()
                     used_provider = "Pollinations fallback"
             except Exception as exc:
                 errors.append(_provider_error(exc, "Text fallback"))
 
         if not final_text:
+            app.logger.error("All text providers failed for this request: %s", " | ".join(errors[-8:]))
             return jsonify({
-                "reply": "The request could not be completed by the configured models. Check the hosting environment variables and logs.\n\n" + "\n".join(errors[-5:]),
+                "reply": "I couldn't get a response from the text models just now. Please try again in a moment. If this keeps happening, check the hosting logs and the configured API keys. ⚠️",
                 "error": True,
-            }), 200
+            }), 503
 
         notice = ""
         if used_provider == "Pollinations fallback":
-            notice = "The configured primary model was unavailable, so an external fallback answered this message. " + " ".join(errors[-3:])
+            notice = "My primary text model was temporarily unavailable, so I used a backup provider. 🔄"
         return jsonify({"reply": final_text, "provider": used_provider, "notice": notice}), 200
 
     except Exception as exc:
