@@ -253,7 +253,7 @@
                         </div>
                     </div>
                     <button id="mic-btn" onclick="toggleMic()" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0" title="Dictate a message"><i data-lucide="mic" class="w-5 h-5"></i></button>
-                    <button id="live-btn" onclick="startGeminiLive()" class="hidden h-9 sm:h-10 px-3 flex items-center justify-center gap-1.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-95 flex-shrink-0" title="Start a live voice conversation" aria-label="Start live voice conversation"><i data-lucide="audio-lines" class="w-4 h-4"></i><span class="text-[11px] sm:text-xs font-extrabold tracking-wider">LIVE</span></button>
+                    <button id="live-btn" onclick="startGeminiLive()" class="hidden w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-95 flex-shrink-0" title="Start a live voice conversation" aria-label="Start live voice conversation"><i data-lucide="audio-lines" class="w-4 h-4"></i></button>
                     <button id="send-btn" onclick="sendMessage()" class="hidden w-9 h-9 sm:w-10 sm:h-10 items-center justify-center bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm flex-shrink-0"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
                 </div>
             </div>
@@ -266,8 +266,8 @@
         <div class="w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden rounded-[2rem] bg-white dark:bg-[#1d1d20] text-zinc-900 dark:text-white shadow-2xl border border-black/10 dark:border-white/10">
             <div class="flex items-center gap-3 px-5 py-4 sm:px-6 border-b border-black/5 dark:border-white/10">
                 <div class="w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center"><i data-lucide="audio-lines" class="w-5 h-5"></i></div>
-                <div class="flex-1 min-w-0"><h2 id="live-title" class="font-bold text-lg">Beast AI LIVE</h2><p id="live-status" class="text-sm text-zinc-500 dark:text-zinc-400">Preparing microphone…</p></div>
-                <span class="flex items-center gap-1.5 text-[10px] font-black tracking-widest text-red-600 bg-red-50 dark:bg-red-950/50 px-2.5 py-1.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> LIVE</span>
+                <div class="flex-1 min-w-0"><h2 id="live-title" class="font-bold text-lg">Beast AI Voice</h2><p id="live-status" class="text-sm text-zinc-500 dark:text-zinc-400">Preparing microphone…</p></div>
+                
             </div>
             <div id="live-transcript" class="px-5 py-5 sm:px-6 flex-1 overflow-y-auto min-h-[180px] space-y-3 custom-scrollbar" aria-live="polite">
                 <p id="live-empty-state" class="text-center text-sm text-zinc-400 py-10">Start talking whenever you're ready. Beast AI will listen and reply aloud. 🎙️</p>
@@ -316,10 +316,38 @@
                 if (data.note) result += `\n\n${data.note}`;
             } else if (directURL && data.media_type === "video") {
                 result = `<video src="${escapeHTML(directURL)}" controls playsinline preload="metadata" class="w-full rounded-xl shadow-md my-3 border border-black/5 dark:border-white/10"></video>\n\n[Open generated video in a new tab](${directURL})`;
+                if (data.note) result += `\n\n${data.note}`;
             } else if (data && data.notice) {
                 result += `\n\n${data.notice}`;
             }
             return result;
+        }
+
+        async function waitForMediaJob(initialData, msgId) {
+            let job = initialData;
+            const provider = String(job.provider || '');
+            const maxAttempts = provider === 'JSON2Video' ? 60 : 45;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const loader = document.getElementById(`loader-${msgId}`);
+                if (loader) {
+                    const statusText = job.reply || (provider === 'JSON2Video' ? 'Rendering your video… 🎬' : 'Generating media…');
+                    loader.innerHTML = `<div class="text-sm text-zinc-500 dark:text-zinc-400 py-2">${escapeHTML(statusText)}</div><div class="jumping-dots text-zinc-500 dark:text-zinc-400 py-1"><span></span><span></span><span></span></div>`;
+                }
+                await new Promise(resolve => setTimeout(resolve, 4000));
+                const response = await fetch('https://beast-ai-v2.onrender.com/api/media/status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: job.mode || currentMode,
+                        request_id: job.request_id,
+                        provider: job.provider
+                    })
+                });
+                job = await response.json().catch(() => ({ reply: `Media status request failed (HTTP ${response.status}). ⚠️`, error: true }));
+                if (!response.ok && !job.reply) job.reply = `Media status request failed (HTTP ${response.status}). ⚠️`;
+                if (!job.media_pending) return job;
+            }
+            return { reply: 'This video is still rendering. Please wait a little longer and check your JSON2Video dashboard if it does not appear. ⏳', error: true };
         }
 
         function renderMarkdown(text) {
@@ -582,7 +610,7 @@
                     const systemInstruction = LIVE_SYSTEM_INSTRUCTION;
                     liveSocket.send(JSON.stringify({ setup: {
                         model: 'models/' + model,
-                        responseModalities: ['AUDIO'],
+                        generationConfig: { responseModalities: ['AUDIO'] },
                         inputAudioTranscription: {},
                         outputAudioTranscription: {},
                         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -795,11 +823,12 @@
                 clearAllAttachments();
                 // 🚀 CLOUDFLARE FETCH DIRECTED TO RENDER
                 const res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData });
-                const data = await res.json().catch(() => ({}));
+                let data = await res.json().catch(() => ({}));
                 if (!res.ok && !data.reply) {
                     data.reply = `Request failed (HTTP ${res.status}). Reduce attachment size or check the Render service logs.`;
                     data.error = true;
                 }
+                if (data.media_pending) data = await waitForMediaJob(data, msgId);
                 const loader = document.getElementById(`loader-${msgId}`); 
                 const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
                 const targetBox = targetBoxWrap.querySelector('.prose');
