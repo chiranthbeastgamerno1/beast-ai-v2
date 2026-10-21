@@ -293,7 +293,7 @@ def _cloudflare_image_bytes(prompt: str) -> tuple[bytes, str]:
     endpoint = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/{model_path}"
     # FLUX.1 Schnell REST schema rejects `seed` in this account/API schema.
     # Keep only documented request fields.
-    payload = {"prompt": clean_prompt, "steps": 4}
+    payload = {"prompt": clean_prompt}
     req = urllib.request.Request(
         endpoint,
         data=json.dumps(payload).encode("utf-8"),
@@ -370,7 +370,8 @@ def _start_cloudflare_image(message: str):
             "error": True,
         }), 200
     # The browser requests this same-origin endpoint to receive the actual image bytes.
-    image_url = "/api/media/image?" + urllib.parse.urlencode({"prompt": message[:2048]})
+    image_base = os.environ.get("PUBLIC_API_BASE_URL", "https://beast-ai-v2.onrender.com").rstrip("/")
+    image_url = image_base + "/api/media/image?" + urllib.parse.urlencode({"prompt": message[:2048]})
     return jsonify({
         "reply": f"![Generated image](<{image_url}>)\n\n🎨",
         "provider": "Cloudflare Workers AI · FLUX.1 Schnell",
