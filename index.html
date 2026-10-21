@@ -255,25 +255,6 @@
         </div>
     </div>
 
-
-    <!-- Gemini Live voice conversation overlay -->
-    <div id="live-overlay" class="hidden fixed inset-0 z-[100] bg-zinc-950/55 backdrop-blur-sm p-4 sm:p-6 items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="live-title">
-        <div class="w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden rounded-[2rem] bg-white dark:bg-[#1d1d20] text-zinc-900 dark:text-white shadow-2xl border border-black/10 dark:border-white/10">
-            <div class="flex items-center gap-3 px-5 py-4 sm:px-6 border-b border-black/5 dark:border-white/10">
-                <div class="w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center"><i data-lucide="audio-lines" class="w-5 h-5"></i></div>
-                <div class="flex-1 min-w-0"><h2 id="live-title" class="font-bold text-lg">Beast AI Voice</h2><p id="live-status" class="text-sm text-zinc-500 dark:text-zinc-400">Preparing microphone…</p></div>
-                
-            </div>
-            <div id="live-transcript" class="px-5 py-5 sm:px-6 flex-1 overflow-y-auto min-h-[180px] space-y-3 custom-scrollbar" aria-live="polite">
-                <p id="live-empty-state" class="text-center text-sm text-zinc-400 py-10">Speak, then tap Finish speaking. Beast AI will transcribe your voice and reply aloud. 🎙️</p>
-            </div>
-            <div class="px-5 py-4 sm:px-6 border-t border-black/5 dark:border-white/10 flex items-center justify-between gap-4">
-                <p class="text-xs text-zinc-500 dark:text-zinc-400">Use headphones to reduce echo.</p>
-                <button id="live-end-btn" onclick="stopGroqLive()" class="px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors"><i data-lucide="phone-off" class="w-4 h-4 inline-block mr-1.5"></i>Finish speaking</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         lucide.createIcons();
         let currentMode = 'chat'; let currentSpeed = 'normal'; let attachedFiles = []; let currentSessionId = null;
@@ -304,7 +285,7 @@
             const directURL = safeMediaURL(data && data.media_url);
             let result = (data && typeof data.reply === "string") ? data.reply : "The backend returned an empty response.";
             if (directURL && data.media_type === "image") {
-                result = `![Generated image](<${directURL}>)\n\n[⬇ Download image](<${directURL}>)`;
+                result = `![Generated image](<${directURL}>)`;
                 if (data.note) result += `\n\n${data.note}`;
             } else if (directURL && data.media_type === "video") {
                 result = `<video src="${escapeHTML(directURL)}" controls playsinline preload="metadata" class="w-full rounded-xl shadow-md my-3 border border-black/5 dark:border-white/10"></video>\n\n[Open generated video in a new tab](${directURL})`;
@@ -349,18 +330,17 @@
         }
 
         function renderMarkdown(text) {
-            let html = marked.parse(processMedia(text || ""));
-            // Style the generated-image download link as a button.
-            html = html.replace(/<a href="([^"]+)"[^>]*>⬇ Download image<\/a>/g,
-                '<a href="$1" download target="_blank" rel="noopener" class="inline-flex items-center gap-2 mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold no-underline transition-colors">⬇ Download image</a>');
+            // Generated images get a dedicated download control immediately below the image.
+            const sourceText = String(text || "").replace(/!\[([^\]]*)\]\(<?(https?:\/\/[^\s)>]+|\/api\/media\/image\?[^\s)>]+)>?\)/g,
+                (_, alt, url) => `<figure class="generated-image-wrap my-4 flex flex-col items-start gap-3"><img src="${escapeHTML(url)}" alt="${escapeHTML(alt || 'Generated image')}" class="max-w-full h-auto rounded-xl shadow-md border border-black/5 dark:border-white/10" loading="lazy"><a href="${escapeHTML(url)}" download="beast-ai-generated-image.png" target="_blank" rel="noopener noreferrer" class="generated-image-download inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black text-sm font-semibold transition-colors"><i data-lucide="download" class="w-4 h-4"></i> Download image</a></figure>`);
+            const html = marked.parse(processMedia(sourceText));
             if (window.DOMPurify) {
                 return window.DOMPurify.sanitize(html, {
-                    ADD_TAGS: ["video", "source"],
-                    ADD_ATTR: ["controls", "playsinline", "preload", "autoplay", "loop", "download", "target", "rel", "class"]
+                    ADD_TAGS: ["video", "source", "figure", "img", "i"],
+                    ADD_ATTR: ["controls", "playsinline", "preload", "autoplay", "loop", "src", "alt", "loading", "download", "target", "rel", "class", "data-lucide"]
                 });
             }
-            // Safe fallback if the sanitizer CDN is unavailable: render plain text, not raw HTML.
-            return `<p>${escapeHTML(String(text || "" )).replace(/\n/g, "<br>")}</p>`;
+            return `<p>${escapeHTML(sourceText).replace(/\n/g, "<br>")}</p>`;
         }
 
         function checkInput() {
@@ -372,17 +352,7 @@
             if (inputField.value.trim().length > 0 || attachedFiles.length > 0) freshChatLiveEligible = false;
             if (hasDraft) { sendBtn.classList.remove('hidden'); sendBtn.classList.add('flex'); }
             else { sendBtn.classList.add('hidden'); sendBtn.classList.remove('flex'); }
-            updateLiveButtonVisibility();
-        }
-
-        function updateLiveButtonVisibility() {
-            const btn = document.getElementById('live-btn');
-            if (!btn) return;
-            const welcome = document.getElementById('welcome-box');
-            const welcomeVisible = welcome && welcome.style.display !== 'none';
-            const inputIsEmpty = !document.getElementById('user-input')?.value.trim();
-            const shouldShow = freshChatLiveEligible && !currentSessionId && currentMode === 'chat' && inputIsEmpty && attachedFiles.length === 0 && welcomeVisible && !liveStarting && !liveActive;
-            btn.classList.toggle('hidden', !shouldShow);
+            
         }
 
         let isAttachMenuOpen = false;
@@ -406,7 +376,7 @@
             input.placeholder = placeholders[currentMode];
             renderAttachmentPreviews();
             checkInput();
-            if (currentMode === 'chat') updateLiveButtonVisibility();
+            if (currentMode === 'chat') 
             input.focus();
         }
 
@@ -462,7 +432,7 @@
             const isDark = document.body.classList.contains('dark');
             document.getElementById('theme-icon-desktop').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-desktop').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
             document.getElementById('theme-icon-mobile').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-mobile').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
-            lucide.createIcons(); initDesktopSidebar(); loadHistory(); initName(); checkInput(); updateLiveButtonVisibility();
+            lucide.createIcons(); initDesktopSidebar(); loadHistory(); initName(); checkInput(); 
         };
 
         // Groq Whisper voice mode: record one spoken turn, transcribe it server-side,
@@ -512,7 +482,7 @@
             const btn = document.getElementById('live-end-btn');
             btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = 'Finish speaking'; btn.onclick = stopGroqLive;
             if (!currentSessionId) freshChatLiveEligible = true;
-            checkInput(); updateLiveButtonVisibility();
+            checkInput(); 
         }
 
         async function startGroqLive() {
@@ -520,7 +490,7 @@
             if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
                 alert('Voice mode needs a supported browser and a secure HTTPS page. Try Chrome. 🎙️'); return;
             }
-            liveStarting = true; freshChatLiveEligible = false; updateLiveButtonVisibility();
+            liveStarting = true; freshChatLiveEligible = false; 
             showLiveTranscriptPlaceholder();
             const overlay = document.getElementById('live-overlay'); overlay.classList.remove('hidden'); overlay.classList.add('flex');
             setLiveStatus('Requesting microphone access…');
@@ -547,7 +517,7 @@
                 liveStarting = false; liveActive = false;
                 if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
                 const btn = document.getElementById('live-end-btn'); btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = 'Close'; btn.onclick = closeGroqLiveOverlay;
-                freshChatLiveEligible = true; updateLiveButtonVisibility();
+                freshChatLiveEligible = true; 
             }
         }
 
@@ -615,7 +585,7 @@
                     if (liveProcessing) liveProcessing = false;
                     liveStarting = false; liveActive = false;
                     if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
-                    updateLiveButtonVisibility();
+                    
                 }
             }
         }
@@ -645,7 +615,7 @@
             const chatBox = document.getElementById('chat-box'); chatBox.innerHTML = ''; chatBox.classList.replace('hidden', 'flex');
             (session.messages || []).forEach(m => appendHistoryMessage(m));
             if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); }
-            loadHistory(); checkInput(); updateLiveButtonVisibility();
+            loadHistory(); checkInput(); 
         }
         function startNewChat() {
             if (liveActive || liveStarting || liveProcessing) closeGroqLiveOverlay();
@@ -655,7 +625,7 @@
             document.getElementById('chat-box').innerHTML = ''; document.getElementById('chat-box').classList.replace('flex', 'hidden');
             document.getElementById('welcome-box').style.display = 'flex';
             if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); }
-            renderAttachmentPreviews(); checkInput(); updateLiveButtonVisibility();
+            renderAttachmentPreviews(); checkInput(); 
         }
 
         async function compressImage(file, maxWidth = 1024) {
@@ -688,7 +658,7 @@
             const input = document.getElementById('user-input'); const msg = input.value.trim();
             if (!msg && attachedFiles.length === 0) return;
             
-            input.value = ''; freshChatLiveEligible = false; checkInput(); updateLiveButtonVisibility();
+            input.value = ''; freshChatLiveEligible = false; checkInput(); 
             
             if (!currentSessionId) currentSessionId = "BeastSession_" + Date.now();
             document.getElementById('welcome-box').style.display = 'none'; 
@@ -769,7 +739,8 @@
                 
                 loader.style.display = 'none'; 
                 targetBoxWrap.classList.remove('hidden'); 
-                targetBox.innerHTML = renderMarkdown(replyText); 
+                targetBox.innerHTML = renderMarkdown(replyText);
+                if (window.lucide) lucide.createIcons(); 
                 
                 // 🚀 FIXED: Added beautiful blur text-reveal animation upon load
                 targetBox.classList.add('text-reveal');
@@ -794,7 +765,7 @@
             document.getElementById('scroll-container').scrollTop = document.getElementById('scroll-container').scrollHeight; 
             loadHistory();
             currentMode = 'chat'; document.getElementById('user-input').placeholder = "Ask Beast...";
-            renderAttachmentPreviews(); checkInput(); updateLiveButtonVisibility();
+            renderAttachmentPreviews(); checkInput(); 
             return lastSentReplyText;
         }
 
@@ -840,7 +811,7 @@
             });
             if (attachedFiles.length === 0 && !modeLabels[currentMode]) container.classList.replace('flex', 'hidden');
             else container.classList.replace('hidden', 'flex');
-            checkInput(); lucide.createIcons(); updateLiveButtonVisibility();
+            checkInput(); lucide.createIcons(); 
         }
         function removeSpecificAttachment(index) { attachedFiles.splice(index, 1); renderAttachmentPreviews(); }
         function clearAllAttachments() { attachedFiles = []; document.getElementById('file-input').value = ''; renderAttachmentPreviews(); }
