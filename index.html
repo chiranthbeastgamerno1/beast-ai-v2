@@ -249,7 +249,6 @@
                         </div>
                     </div>
                     <button id="mic-btn" onclick="toggleMic()" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0" title="Dictate a message"><i data-lucide="mic" class="w-5 h-5"></i></button>
-                    <button id="live-btn" onclick="startGroqLive()" class="hidden w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-95 flex-shrink-0" title="Start a live voice conversation" aria-label="Start live voice conversation"><i data-lucide="audio-lines" class="w-4 h-4"></i></button>
                     <button id="send-btn" onclick="sendMessage()" class="hidden w-9 h-9 sm:w-10 sm:h-10 items-center justify-center bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm flex-shrink-0"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
                 </div>
             </div>
@@ -305,7 +304,7 @@
             const directURL = safeMediaURL(data && data.media_url);
             let result = (data && typeof data.reply === "string") ? data.reply : "The backend returned an empty response.";
             if (directURL && data.media_type === "image") {
-                result = `![Generated image](<${directURL}>)`;
+                result = `![Generated image](<${directURL}>)\n\n[⬇ Download image](<${directURL}>)`;
                 if (data.note) result += `\n\n${data.note}`;
             } else if (directURL && data.media_type === "video") {
                 result = `<video src="${escapeHTML(directURL)}" controls playsinline preload="metadata" class="w-full rounded-xl shadow-md my-3 border border-black/5 dark:border-white/10"></video>\n\n[Open generated video in a new tab](${directURL})`;
@@ -350,11 +349,14 @@
         }
 
         function renderMarkdown(text) {
-            const html = marked.parse(processMedia(text || ""));
+            let html = marked.parse(processMedia(text || ""));
+            // Style the generated-image download link as a button.
+            html = html.replace(/<a href="([^"]+)"[^>]*>⬇ Download image<\/a>/g,
+                '<a href="$1" download target="_blank" rel="noopener" class="inline-flex items-center gap-2 mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold no-underline transition-colors">⬇ Download image</a>');
             if (window.DOMPurify) {
                 return window.DOMPurify.sanitize(html, {
                     ADD_TAGS: ["video", "source"],
-                    ADD_ATTR: ["controls", "playsinline", "preload", "autoplay", "loop"]
+                    ADD_ATTR: ["controls", "playsinline", "preload", "autoplay", "loop", "download", "target", "rel", "class"]
                 });
             }
             // Safe fallback if the sanitizer CDN is unavailable: render plain text, not raw HTML.
