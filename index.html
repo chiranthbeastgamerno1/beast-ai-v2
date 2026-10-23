@@ -39,6 +39,9 @@
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.2); border-radius: 4px; }
         body.dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.2); }
+        /* Message box: never show a scrollbar (fixes the thin grey line on phones) */
+        #user-input { scrollbar-width: none; -ms-overflow-style: none; }
+        #user-input::-webkit-scrollbar { display: none; width: 0; height: 0; }
         .sidebar-scroll::-webkit-scrollbar { display: none; }
         .sidebar-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: auto; }
         
@@ -218,7 +221,7 @@
                 </div>
 
                 <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf" multiple onchange="handleFile(this)">
-                <textarea id="user-input" rows="1" class="flex-1 min-w-0 bg-transparent border-none outline-none resize-none max-h-[140px] py-2 px-2 sm:py-2.5 sm:px-3 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5 sm:mb-1 custom-scrollbar overflow-y-auto" placeholder="Ask Beast..." onkeydown="handleEnter(event)" oninput="checkInput()"></textarea>
+                <textarea id="user-input" rows="1" class="flex-1 min-w-0 bg-transparent border-none outline-none resize-none max-h-[140px] py-2 px-2 sm:py-2.5 sm:px-3 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5 sm:mb-1 overflow-y-hidden" placeholder="Ask Beast..." onkeydown="handleEnter(event)" oninput="checkInput()"></textarea>
                 
                 <div class="flex items-center gap-1 sm:gap-1.5 pr-1 flex-shrink-0 mb-[0.15rem] sm:mb-[0.30rem]">
                     <div id="speed-selector-wrap" class="relative z-40">
@@ -347,7 +350,9 @@
             const inputField = document.getElementById('user-input');
             const sendBtn = document.getElementById('send-btn');
             inputField.style.height = 'auto';
-            inputField.style.height = inputField.scrollHeight + 'px';
+            const fullHeight = inputField.scrollHeight;
+            inputField.style.height = Math.min(fullHeight, 140) + 'px';
+            inputField.style.overflowY = fullHeight > 140 ? 'auto' : 'hidden';
             const hasDraft = inputField.value.trim().length > 0 || attachedFiles.length > 0;
             if (inputField.value.trim().length > 0 || attachedFiles.length > 0) freshChatLiveEligible = false;
             if (hasDraft) { sendBtn.classList.remove('hidden'); sendBtn.classList.add('flex'); }
