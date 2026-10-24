@@ -891,6 +891,109 @@ def create_gemini_live_token():
         return jsonify({"error": "Could not create a Gemini Live session token: " + detail[:900]}), 502
 
 
+# ============ LOGIN: EMAIL OTP  (paste this block just ABOVE:  @app.route("/", methods=["GET"]) ) ============
+import hashlib
+import hmac
+import secrets
+
+OTP_SECRET = os.environ.get("OTP_SECRET", "")
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+BREVO_SENDER_EMAIL = os.environ.get("BREVO_SENDER_EMAIL", "")
+OTP_TTL = 600  # code is valid for 10 minutes
+_otp_sent_at = {}  # email -> last send time (simple per-instance throttle)
+_otp_fails = {}    # email -> [failed attempts, first failure time]
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _b64(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _sign(payload: dict, extra: str) -> str:
+    body = _b64(json.dumps(payload, separators=(",", ":")).encode())
+    sig = hmac.new(OTP_SECRET.encode(), (body + "|" + extra).encode(), hashlib.sha256).hexdigest()
+    return body + "." + sig
+
+
+def _check(token: str, extra: str):
+    try:
+        body, sig = token.split(".", 1)
+        good = hmac.new(OTP_SECRET.encode(), (body + "|" + extra).encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, good):
+            return None
+        payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+        return payload if payload.get("x", 0) > time.time() else None
+    except Exception:
+        return None
+
+
+def _send_otp_email(to_email: str, code: str):
+    payload = {
+        "sender": {"name": "Beast AI", "email": BREVO_SENDER_EMAIL},
+        "to": [{"email": to_email}],
+        "subject": f"{code} is your Beast AI login code",
+        "htmlContent": (
+            "<div style='font-family:Arial,sans-serif'><h2>Beast AI 🦖</h2><p>Your login code is:</p>"
+            f"<p style='font-size:32px;font-weight:800;letter-spacing:6px'>{code}</p>"
+            "<p>It expires in 10 minutes. If you did not ask for it, ignore this email.</p></div>"
+        ),
+    }
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json",
+                 "Accept": "application/json", "User-Agent": "Mozilla/5.0 (compatible; BeastAI/1.0)"},
+        method="POST",
+    )
+    urllib.request.urlopen(req, timeout=15).read()
+
+
+@app.route("/api/auth/send-otp", methods=["POST"])
+def auth_send_otp():
+    if not (OTP_SECRET and BREVO_API_KEY and BREVO_SENDER_EMAIL):
+        return jsonify({"ok": False, "error": "Email login is not set up on the server yet."}), 503
+    email = str((request.get_json(silent=True) or {}).get("email", "")).strip().lower()
+    if len(email) > 254 or not _EMAIL_RE.match(email):
+        return jsonify({"ok": False, "error": "Enter a valid email address."}), 400
+    now = time.time()
+    if now - _otp_sent_at.get(email, 0) < 45:
+        return jsonify({"ok": False, "error": "Please wait a little before asking for another code."}), 429
+    code = f"{secrets.randbelow(1000000):06d}"
+    try:
+        _send_otp_email(email, code)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "ignore")[:160]
+        return jsonify({"ok": False, "error": f"Email service said HTTP {e.code}: {detail}"}), 502
+    except Exception as e:
+        return jsonify({"ok": False, "error": "Could not send the email: " + str(e)[:120]}), 502
+    if len(_otp_sent_at) > 5000:
+        _otp_sent_at.clear()
+    _otp_sent_at[email] = now
+    return jsonify({"ok": True, "otp_token": _sign({"e": email, "x": int(now) + OTP_TTL}, code)})
+
+
+@app.route("/api/auth/verify-otp", methods=["POST"])
+def auth_verify_otp():
+    if not OTP_SECRET:
+        return jsonify({"ok": False, "error": "Email login is not set up on the server yet."}), 503
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    code = str(data.get("code", "")).strip()
+    now = time.time()
+    fails = _otp_fails.get(email)
+    if fails and now - fails[1] < 600 and fails[0] >= 8:
+        return jsonify({"ok": False, "error": "Too many wrong tries. Request a new code in a few minutes."}), 429
+    payload = _check(str(data.get("otp_token", "")), code) if re.fullmatch(r"\d{6}", code) else None
+    if not payload or payload.get("e") != email:
+        f = _otp_fails.get(email)
+        _otp_fails[email] = [1, now] if (not f or now - f[1] > 600) else [f[0] + 1, f[1]]
+        return jsonify({"ok": False, "error": "Wrong or expired code."}), 400
+    _otp_fails.pop(email, None)
+    session = _sign({"e": email, "x": int(now) + 30 * 86400}, "session")
+    return jsonify({"ok": True, "email": email, "session": session})
+# ============ END LOGIN BLOCK ============
+
+
 @app.route("/", methods=["GET"])
 def home():
     return "Beast AI Core is online. Use /api/health for status."
