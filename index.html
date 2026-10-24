@@ -883,9 +883,16 @@
     const API_BASE = 'https://beast-ai-v2.onrender.com';   // where your backend lives (already set correctly for this file)
 
     // ✏️ PASTE YOUR FIREBASE CONFIG: delete the next line, then paste the whole  const firebaseConfig = { ... };  block from Firebase in its place
-    const firebaseConfig = { apiKey: "PASTE_HERE", authDomain: "PASTE_HERE", projectId: "PASTE_HERE", storageBucket: "PASTE_HERE", messagingSenderId: "PASTE_HERE", appId: "PASTE_HERE" };
+    const firebaseConfig = {
+        apiKey: "AIzaSyD74AnidhtOIUjBN4WnbMt0tEniYMR1Yek",
+        authDomain: "beast-ai-e13d6.firebaseapp.com",
+        projectId: "beast-ai-e13d6",
+        storageBucket: "beast-ai-e13d6.firebasestorage.app",
+        messagingSenderId: "538815560390",
+        appId: "1:538815560390:web:8bd5a9543b5cf46774f5c7"
+    };
 
-    const FB = 'https://www.gstatic.com/firebasejs/12.10.0/';
+    const FB = 'https://www.gstatic.com/firebasejs/13.1.0/';
     const $ = (id) => document.getElementById(id);
     let otpToken = '', pendingEmail = '', cooldownTimer = null;
 
