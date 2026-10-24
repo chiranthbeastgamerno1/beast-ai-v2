@@ -120,17 +120,16 @@
         </div>
 
         <div id="auth-step-email" class="hidden flex-col gap-3">
-            <p class="text-sm text-center text-zinc-500 dark:text-zinc-400 font-medium">Enter your email and we'll send you a 6-digit code.</p>
+            <p class="text-sm text-center text-zinc-500 dark:text-zinc-400 font-medium">Enter your email and we'll send you a secure sign-in link.</p>
             <input id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')authSendCode()" class="w-full bg-zinc-100 dark:bg-[#0e0e11] text-zinc-900 dark:text-white rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-zinc-400 font-medium">
-            <button id="auth-send-btn" onclick="authSendCode()" class="w-full py-3.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white text-white dark:text-black font-bold transition active:scale-95 shadow-lg">Send code</button>
+            <button id="auth-send-btn" onclick="authSendCode()" class="w-full py-3.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white text-white dark:text-black font-bold transition active:scale-95 shadow-lg">Send sign-in link</button>
             <button onclick="authShow('choose')" class="text-sm font-semibold text-zinc-500 dark:text-zinc-400 hover:underline">← Back</button>
         </div>
 
         <div id="auth-step-code" class="hidden flex-col gap-3">
-            <p class="text-sm text-center text-zinc-500 dark:text-zinc-400 font-medium">We sent a 6-digit code to <b id="auth-email-shown" class="text-zinc-900 dark:text-white break-all"></b>. Check your spam folder too.</p>
-            <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" onkeydown="if(event.key==='Enter')authVerify()" oninput="this.value=this.value.replace(/\D/g,'')" class="w-full bg-zinc-100 dark:bg-[#0e0e11] text-zinc-900 dark:text-white rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-zinc-400 text-center text-2xl tracking-[0.5em] font-bold">
-            <button id="auth-verify-btn" onclick="authVerify()" class="w-full py-3.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white text-white dark:text-black font-bold transition active:scale-95 shadow-lg">Verify &amp; continue</button>
-            <button id="auth-resend-btn" onclick="authSendCode()" class="text-sm font-semibold text-zinc-500 dark:text-zinc-400 hover:underline disabled:opacity-50 disabled:no-underline">Resend code</button>
+            <p class="text-sm text-center text-zinc-500 dark:text-zinc-400 font-medium">A secure sign-in link was sent to <b id="auth-email-shown" class="text-zinc-900 dark:text-white break-all"></b>.</p>
+            <p class="text-sm text-center text-zinc-500 dark:text-zinc-400">Open the email on this device and click the link to finish signing in. Check your spam folder too.</p>
+            <button id="auth-resend-btn" onclick="authSendCode(true)" class="w-full py-3.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white text-white dark:text-black font-bold transition active:scale-95 shadow-lg">Resend sign-in link</button>
             <button onclick="authShow('email')" class="text-sm font-semibold text-zinc-500 dark:text-zinc-400 hover:underline">← Use a different email</button>
         </div>
 
@@ -877,35 +876,50 @@
         let animateId = 0; const startT = performance.now();
         const update = t => { animateId = requestAnimationFrame(update); if(!document.body.classList.contains('dark')) return; const time = (t - startT) * 0.001; program.uniforms.uTime.value = time * config.speed; renderer.render({ scene: mesh }); }; animateId = requestAnimationFrame(update);
     </script>
-<!-- ============ LOGIN LOGIC (paste just BEFORE the last </body>) ============ -->
+<!-- ============ FIREBASE LOGIN LOGIC ============ -->
 <script>
 (() => {
-    const API_BASE = 'https://beast-ai-v2.onrender.com';   // where your backend lives (already set correctly for this file)
-
-    // ✏️ PASTE YOUR FIREBASE CONFIG: delete the next line, then paste the whole  const firebaseConfig = { ... };  block from Firebase in its place
+    const API_BASE = 'https://beast-ai-v2.onrender.com'; // API base for the rest of Beast AI; Firebase email auth itself needs no backend OTP route.
     const firebaseConfig = {
-        apiKey: "AIzaSyD74AnidhtOIUjBN4WnbMt0tEniYMR1Yek",
+        apiKey: "AIzaSyD74AnidhtOIuJBN4WnbMt0tEniYMR1Yek",
         authDomain: "beast-ai-e13d6.firebaseapp.com",
         projectId: "beast-ai-e13d6",
         storageBucket: "beast-ai-e13d6.firebasestorage.app",
         messagingSenderId: "538815560390",
         appId: "1:538815560390:web:8bd5a9543b5cf46774f5c7"
     };
-
     const FB = 'https://www.gstatic.com/firebasejs/13.1.0/';
     const $ = (id) => document.getElementById(id);
-    let otpToken = '', pendingEmail = '', cooldownTimer = null;
+    let pendingEmail = localStorage.getItem('emailForSignIn') || '';
+    let firebasePromise = null;
 
     if (localStorage.getItem('beast-theme') === 'dark') document.body.classList.add('dark');
 
-    function savedAuth() { try { return JSON.parse(localStorage.getItem('beast-auth') || 'null'); } catch (_) { return null; } }
-    function msg(text, good) { const el = $('auth-msg'); el.textContent = text || ''; el.className = 'text-sm text-center font-semibold mt-3 min-h-[1.25rem] ' + (good ? 'text-green-600' : 'text-red-500'); }
-    function busy(on) { ['auth-google-btn', 'auth-send-btn', 'auth-verify-btn'].forEach(id => { const b = $(id); b.disabled = on; b.style.opacity = on ? '0.6' : ''; }); }
+    function savedAuth() {
+        try { return JSON.parse(localStorage.getItem('beast-auth') || 'null'); }
+        catch (_) { return null; }
+    }
+    function msg(text, good = false) {
+        const el = $('auth-msg');
+        if (!el) return;
+        el.textContent = text || '';
+        el.className = 'text-sm text-center font-semibold mt-3 min-h-[1.25rem] ' + (good ? 'text-green-600' : 'text-red-500');
+    }
+    function busy(on) {
+        ['auth-google-btn', 'auth-send-btn', 'auth-resend-btn'].forEach(id => {
+            const b = $(id);
+            if (b) { b.disabled = on; b.style.opacity = on ? '0.6' : ''; }
+        });
+    }
     function show(step) {
-        ['choose', 'email', 'code'].forEach(s => { const el = $('auth-step-' + s); el.classList.toggle('hidden', s !== step); el.classList.toggle('flex', s === step); });
+        ['choose', 'email', 'code'].forEach(s => {
+            const el = $('auth-step-' + s);
+            if (!el) return;
+            el.classList.toggle('hidden', s !== step);
+            el.classList.toggle('flex', s === step);
+        });
         msg('');
-        const f = { email: 'auth-email', code: 'auth-code' }[step];
-        if (f) setTimeout(() => $(f).focus(), 50);
+        if (step === 'email') setTimeout(() => $('auth-email')?.focus(), 50);
     }
     function refreshAccountButtons() {
         const a = savedAuth();
@@ -915,77 +929,133 @@
     function finish(auth) {
         localStorage.setItem('beast-auth', JSON.stringify(auth));
         $('auth-gate').style.display = 'none';
-        try {   // Google users: reuse their first name so the "what should Beast call you" box is skipped
+        try {
             if (auth.name && !userName) {
                 userName = auth.name.split(' ')[0].toUpperCase();
                 localStorage.setItem('beast-username', userName);
-                $('name-modal').classList.add('hidden');
+                $('name-modal')?.classList.add('hidden');
                 if (typeof setGreeting === 'function') setGreeting();
             }
         } catch (_) {}
         refreshAccountButtons();
     }
-    async function call(path, body) {
-        try {
-            const r = await fetch(API_BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-            const text = await r.text();
-            try { return JSON.parse(text); } catch (_) { return { ok: false, error: 'Server problem (HTTP ' + r.status + '). On the Render free plan, wait about 50 seconds and try again.' }; }
-        } catch (_) { return { ok: false, error: 'Could not reach the server. Check your internet and try again.' }; }
+    async function getFirebase() {
+        if (!firebasePromise) {
+            firebasePromise = (async () => {
+                const [appMod, authMod] = await Promise.all([
+                    import(FB + 'firebase-app.js'),
+                    import(FB + 'firebase-auth.js')
+                ]);
+                const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebaseConfig);
+                const auth = authMod.getAuth(app);
+                return { appMod, authMod, auth };
+            })();
+        }
+        return firebasePromise;
     }
-    function startCooldown(sec) {
-        const b = $('auth-resend-btn'); clearInterval(cooldownTimer);
-        const tick = () => { if (sec <= 0) { clearInterval(cooldownTimer); b.disabled = false; b.textContent = 'Resend code'; return; } b.disabled = true; b.textContent = 'Resend code in ' + sec + 's'; sec--; };
-        tick(); cooldownTimer = setInterval(tick, 1000);
+    function friendlyAuthError(error) {
+        const code = (error && error.code) || '';
+        if (code === 'auth/unauthorized-domain') return 'This website is not in Firebase Authentication → Settings → Authorized domains.';
+        if (code === 'auth/operation-not-allowed') return 'Enable Email/Password and Email link (passwordless sign-in) in Firebase Authentication.';
+        if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') return 'This sign-in link has expired or was already used. Request a new link.';
+        if (code === 'auth/invalid-email') return 'Please enter a valid email address.';
+        if (code === 'auth/network-request-failed') return 'Network error. Check your connection and try again.';
+        if (code === 'auth/too-many-requests') return 'Too many attempts. Please wait a little and try again.';
+        return (error && error.message) ? error.message : 'Authentication failed. Please try again.';
     }
 
     window.authShow = show;
     window.authGuest = () => finish({ type: 'guest' });
-    window.authLogout = () => { localStorage.removeItem('beast-auth'); location.reload(); };
+    window.authLogout = async () => {
+        localStorage.removeItem('beast-auth');
+        localStorage.removeItem('emailForSignIn');
+        try { const { authMod, auth } = await getFirebase(); await authMod.signOut(auth); } catch (_) {}
+        location.reload();
+    };
 
     window.authGoogle = async () => {
-        if (firebaseConfig.apiKey === 'PASTE_HERE') return msg('Firebase keys are not pasted into the code yet.');
         msg(''); busy(true);
         try {
-            const [appMod, authMod] = await Promise.all([import(FB + 'firebase-app.js'), import(FB + 'firebase-auth.js')]);
-            const app = appMod.getApps().length ? appMod.getApps()[0] : appMod.initializeApp(firebaseConfig);
+            const { authMod, auth } = await getFirebase();
             const provider = new authMod.GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
-            const { user } = await authMod.signInWithPopup(authMod.getAuth(app), provider);
-            finish({ type: 'google', email: user.email, name: user.displayName || '', photo: user.photoURL || '', uid: user.uid });
+            const { user } = await authMod.signInWithPopup(auth, provider);
+            finish({ type: 'google', email: user.email || '', name: user.displayName || '', photo: user.photoURL || '', uid: user.uid });
         } catch (e) {
-            const c = (e && e.code) || '';
-            msg(c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request' ? 'Google sign-in was cancelled.'
-              : c === 'auth/popup-blocked' ? 'Your browser blocked the Google popup. Allow popups for this site and try again.'
-              : c === 'auth/unauthorized-domain' ? 'This website is not in Firebase "Authorized domains" yet.'
-              : c === 'auth/operation-not-allowed' ? 'Google sign-in is not turned on in Firebase yet.'
-              : 'Google sign-in failed: ' + (c || (e && e.message) || 'unknown error'));
+            const code = (e && e.code) || '';
+            msg(code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request'
+                ? 'Google sign-in was cancelled.'
+                : code === 'auth/popup-blocked'
+                    ? 'Your browser blocked the Google popup. Allow popups for this site and try again.'
+                    : code === 'auth/unauthorized-domain'
+                        ? 'Add this website to Firebase Authentication → Settings → Authorized domains.'
+                        : code === 'auth/operation-not-allowed'
+                            ? 'Google sign-in is not enabled in Firebase yet.'
+                            : 'Google sign-in failed: ' + friendlyAuthError(e));
         } finally { busy(false); }
     };
 
-    window.authSendCode = async () => {
-        const email = $('auth-email').value.trim().toLowerCase();
-        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return msg('Enter a valid email address.');
-        busy(true); msg('Sending code…', true);
-        const d = await call('/api/auth/send-otp', { email });
-        busy(false);
-        if (!d.ok) return msg(d.error || 'Could not send the code.');
-        otpToken = d.otp_token; pendingEmail = email;
-        $('auth-email-shown').textContent = email; $('auth-code').value = '';
-        show('code'); startCooldown(45); msg('Code sent! It can take a minute to arrive.', true);
+    // Firebase sends the sign-in link itself; no Brevo, Resend, OTP_SECRET, or backend OTP route is used.
+    window.authSendCode = async (isResend = false) => {
+        const email = (isResend ? pendingEmail : ($('auth-email')?.value || '')).trim().toLowerCase();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+            show('email');
+            return msg('Enter a valid email address.');
+        }
+        busy(true); msg('Sending sign-in link…', true);
+        try {
+            const { authMod, auth } = await getFirebase();
+            const actionCodeSettings = {
+                url: window.location.origin + window.location.pathname,
+                handleCodeInApp: true
+            };
+            await authMod.sendSignInLinkToEmail(auth, email, actionCodeSettings);
+            pendingEmail = email;
+            localStorage.setItem('emailForSignIn', email);
+            $('auth-email-shown').textContent = email;
+            show('code');
+            msg('Sign-in link sent! Open the email on this device to continue.', true);
+        } catch (e) {
+            msg(friendlyAuthError(e));
+        } finally { busy(false); }
     };
 
-    window.authVerify = async () => {
-        const code = $('auth-code').value.trim();
-        if (!/^\d{6}$/.test(code)) return msg('Enter the 6-digit code from your email.');
-        busy(true); msg('Checking…', true);
-        const d = await call('/api/auth/verify-otp', { email: pendingEmail, code, otp_token: otpToken });
-        busy(false);
-        if (!d.ok) return msg(d.error || 'Wrong code. Try again.');
-        finish({ type: 'email', email: d.email, session: d.session });
-    };
+    async function completeEmailLinkIfPresent() {
+        try {
+            const { authMod, auth } = await getFirebase();
+            if (!authMod.isSignInWithEmailLink(auth, window.location.href)) return;
+            $('auth-gate').style.display = 'flex';
+            show('code');
+            msg('Completing email sign-in…', true);
+            let email = localStorage.getItem('emailForSignIn') || '';
+            if (!email) {
+                email = window.prompt('Enter the email address that received this sign-in link:') || '';
+            }
+            email = email.trim().toLowerCase();
+            if (!email) {
+                show('email');
+                msg('Enter the same email address that received the sign-in link.');
+                return;
+            }
+            const { user } = await authMod.signInWithEmailLink(auth, email, window.location.href);
+            localStorage.removeItem('emailForSignIn');
+            pendingEmail = '';
+            try { window.history.replaceState({}, document.title, window.location.pathname); } catch (_) {}
+            finish({ type: 'email', email: user.email || email, name: user.displayName || '', photo: user.photoURL || '', uid: user.uid });
+            msg('Signed in successfully.', true);
+        } catch (e) {
+            $('auth-gate').style.display = 'flex';
+            show('email');
+            $('auth-email').value = localStorage.getItem('emailForSignIn') || '';
+            msg(friendlyAuthError(e));
+        }
+    }
 
-    if (savedAuth()) $('auth-gate').style.display = 'none';   // already logged in (or guest): skip the login screen
+    const isLikelyEmailLink = /[?&](?:mode=signIn|oobCode)=/i.test(window.location.search);
+    if (isLikelyEmailLink) $('auth-gate').style.display = 'flex';
+    else if (savedAuth()) $('auth-gate').style.display = 'none';
     refreshAccountButtons();
+    completeEmailLinkIfPresent();
 })();
 </script>
 </body>
