@@ -1,1057 +1,957 @@
-<!DOCTYPE html>
-<html lang="en" class="h-full w-full overflow-hidden">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Beast AI</title>
-    
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Beast AI">
-    <meta name="theme-color" content="#09090b" id="theme-color-meta">
-    
-    <link rel="icon" href="/beast_ai.png" type="image/png">
-    <link rel="apple-touch-icon" href="/beast_ai.png">
-    <link rel="manifest" href="/manifest.json">
-    
-    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
-    <script>
-        tailwind.config = { darkMode: 'class', theme: { extend: {} } }
-    </script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
-    
-    <style>
-        @import url('https://fonts.cdnfonts.com/css/metropolis-2');
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@900&display=swap');
-        
-        html, body { height: 100%; height: 100dvh; width: 100vw; overflow: hidden; overscroll-behavior: none; position: fixed; margin: 0; padding: 0; background-color: transparent; font-family: 'Metropolis', sans-serif; font-weight: 500; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; -webkit-user-select: none; user-select: none; }
-        .font-beast-logo { font-family: 'Playfair Display', serif; }
-        @keyframes aurora { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-        #bg-light-aurora { position: fixed; inset: 0; z-index: -2; background: linear-gradient(-45deg, #e8f0fe, #fce4ec, #e0f2fe, #fef3c7, #d1fae5); background-size: 300% 300%; animation: aurora 15s ease infinite; transition: opacity 0.8s ease-in-out; opacity: 1; }
-        #aurora-container { position: fixed; inset: 0; z-index: -1; background-color: #09090b; opacity: 0; transition: opacity 0.8s ease-in-out; pointer-events: none; }
-        body.dark #bg-light-aurora { opacity: 0; }
-        body.dark #aurora-container { opacity: 1; }
-        .pb-safe { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-        .pt-safe { padding-top: max(12px, env(safe-area-inset-top)); }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.2); border-radius: 4px; }
-        body.dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.2); }
-        /* Message box: never show a scrollbar (fixes the thin grey line on phones) */
-        #user-input { scrollbar-width: none; -ms-overflow-style: none; }
-        #user-input::-webkit-scrollbar { display: none; width: 0; height: 0; }
-        .sidebar-scroll::-webkit-scrollbar { display: none; }
-        .sidebar-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: auto; }
-        
-        .jumping-dots span { display: inline-block; width: 8px; height: 8px; background-color: currentColor; border-radius: 50%; margin: 0 2px; animation: jump 1.2s infinite ease-in-out both; }
-        .jumping-dots span:nth-child(1) { animation-delay: -0.32s; }
-        .jumping-dots span:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes jump { 0%, 80%, 100% { transform: scale(0); opacity: 0.3; } 40% { transform: scale(1); opacity: 1; } }
-        
-        /* 🚀 NEW ANIMATIONS */
-        @keyframes slideFadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-msg { animation: slideFadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        
-        @keyframes textReveal {
-            from { opacity: 0; filter: blur(4px); }
-            to { opacity: 1; filter: blur(0); }
-        }
-        .text-reveal { animation: textReveal 0.5s ease-out forwards; }
-        
-        .prose, .prose p, .prose li, .prose span, .prose a { font-weight: 500 !important; -webkit-user-select: text; user-select: text; }
-        .prose strong, .prose b { font-weight: 800 !important; color: inherit; }
-        .prose em, .prose i { font-style: normal !important; font-weight: 800 !important; color: inherit; }
-        .prose p { margin-top: 0.4em; margin-bottom: 0.4em; }
-        .prose ul > li::marker { color: #6b7280; font-size: 1.2em; }
-        body.dark .prose ul > li::marker { color: #a1a1aa !important; }
-        
-        .desktop-sidebar { width: 68px; overflow-x: hidden; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .desktop-sidebar:hover:not(.locked) { width: 16rem; }
-        .desktop-sidebar.locked { width: 16rem; }
-        .sidebar-btn { display: flex; align-items: center; height: 44px; width: 100%; border-radius: 9999px; overflow: hidden; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s; cursor: pointer; }
-        .desktop-sidebar .sidebar-btn { width: 44px; }
-        .desktop-sidebar:hover:not(.locked) .sidebar-btn, .desktop-sidebar.locked .sidebar-btn { width: 100%; }
-        .sidebar-icon { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .desktop-sidebar .nav-text { opacity: 0; transition: opacity 0.2s ease; white-space: nowrap; }
-        .desktop-sidebar:hover:not(.locked) .nav-text, .desktop-sidebar.locked .nav-text { opacity: 1; transition-delay: 0.1s; }
-        
-        /* COMPOSER ALIGNMENT
-           Center the composer within the same workspace as the greeting.
-           The desktop workspace starts after the 68px collapsed sidebar and
-           after the 256px locked/open sidebar. On mobile the sidebar overlays
-           the page, so the composer remains centered in the viewport. */
-        .main-content-shift { margin-left: 0; transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .pill-wrapper {
-            left: 50% !important;
-            right: auto !important;
-            width: 100vw;
-            transform: translateX(-50%);
-            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        @media (min-width: 1024px) {
-            .main-content-shift { margin-left: 68px; }
-            .main-content-shift.locked { margin-left: 16rem; }
-            /* Center of the remaining workspace: viewport center + half sidebar width. */
-            .pill-wrapper { left: calc(50% + 34px) !important; }
-            .pill-wrapper.locked { left: calc(50% + 128px) !important; }
-        }
-    </style>
-</head>
-<body class="flex h-[100dvh] w-full text-base">
-<!-- ============ LOGIN SCREEN (paste right AFTER the <body ...> line) ============ -->
-<div id="auth-gate" class="fixed inset-0 z-[200] flex items-center justify-center px-4 py-6 bg-zinc-100/80 dark:bg-black/80 backdrop-blur-xl overflow-y-auto">
-    <div class="w-full max-w-sm my-auto bg-white dark:bg-[#1e1e20] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-6 sm:p-8">
-        <div class="flex justify-center mb-4"><img src="/beast_ai.png" alt="" class="w-16 h-16 rounded-full shadow-md object-cover bg-black"></div>
-        <h2 class="text-2xl font-bold text-center text-zinc-900 dark:text-white mb-1">Welcome to Beast AI</h2>
-        <p class="text-sm text-center text-zinc-500 dark:text-zinc-400 mb-6 font-medium">Log in to continue</p>
+import os
+os.environ["BEAST_DEPLOYMENT_TARGET"] = "render"
+"""Beast AI backend shared by the Vercel and Render deployments.
 
-        <div id="auth-step-choose" class="flex flex-col gap-3">
-            <button id="auth-google-btn" onclick="authGoogle()" class="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#2a2a2d] text-zinc-900 dark:text-white font-bold hover:bg-zinc-50 dark:hover:bg-[#333337] transition active:scale-95">
-                <svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                Continue with Google
-            </button>
-            <div class="flex items-center gap-3 text-xs font-bold text-zinc-400"><div class="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>OR<div class="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div></div>
-            <button onclick="authShow('email')" class="w-full py-3.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white text-white dark:text-black font-bold transition active:scale-95 shadow-lg">Continue with Email</button>
-        </div>
+API keys are read only from environment variables. Never commit secret values.
+"""
+import base64
+import html
+import json
+import os
+import random
+import re
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
-        <div id="auth-step-email" class="hidden flex-col gap-3">
-            <p class="text-sm text-center text-zinc-500 dark:text-zinc-400 font-medium">Enter your email and we'll send you a secure sign-in link.</p>
-            <input id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')authSendCode()" class="w-full bg-zinc-100 dark:bg-[#0e0e11] text-zinc-900 dark:text-white rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-zinc-400 font-medium">
-            <button id="auth-send-btn" onclick="authSendCode()" class="w-full py-3.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white text-white dark:text-black font-bold transition active:scale-95 shadow-lg">Send sign-in link</button>
-            <button onclick="authShow('choose')" class="text-sm font-semibold text-zinc-500 dark:text-zinc-400 hover:underline">← Back</button>
-        </div>
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 
-        <div id="auth-step-code" class="hidden flex-col gap-3">
-            <p class="text-sm text-center text-zinc-500 dark:text-zinc-400 font-medium">A secure sign-in link was sent to <b id="auth-email-shown" class="text-zinc-900 dark:text-white break-all"></b>.</p>
-            <p class="text-sm text-center text-zinc-500 dark:text-zinc-400">Open the email on this device and click the link to finish signing in. Check your spam folder too.</p>
-            <button id="auth-resend-btn" onclick="authSendCode(true)" class="w-full py-3.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-white text-white dark:text-black font-bold transition active:scale-95 shadow-lg">Resend sign-in link</button>
-            <button onclick="authShow('email')" class="text-sm font-semibold text-zinc-500 dark:text-zinc-400 hover:underline">← Use a different email</button>
-        </div>
+try:
+    from google import genai
+    from google.genai import types
+    GENAI_AVAILABLE = True
+except ImportError:  # Keep health/debug endpoints available if dependency installation fails.
+    genai = None  # type: ignore[assignment]
+    types = None  # type: ignore[assignment]
+    GENAI_AVAILABLE = False
 
-        <p id="auth-msg" class="text-sm text-center font-semibold text-red-500 mt-3 min-h-[1.25rem]"></p>
+APP_TARGET = os.environ.get("BEAST_DEPLOYMENT_TARGET", "render").strip().lower()
+IS_VERCEL = APP_TARGET == "vercel"
+MAX_REQUEST_BYTES = 4_300_000 if IS_VERCEL else 20 * 1024 * 1024
+# Text requests have a browser-side 55s deadline. Keep each provider attempt bounded
+# and reserve time for model fallback so failed providers do not leave the UI waiting.
+GEMINI_TIMEOUT_MS = 6_000
+GEMINI_BUDGET_SECONDS = 25
+VIDEO_TIMEOUT_SECONDS = 45 if IS_VERCEL else 75
+KIRA_API_BASE_URL = os.environ.get("KIRA_API_BASE_URL", "https://kiraai.vn/api/v1").rstrip("/")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
+GROK_MODEL = os.environ.get("GROK_MODEL", "grok-4.6").strip()
+KIRA_FLASH_MODEL = os.environ.get("KIRA_FLASH_MODEL", "kira-3.5-flash").strip()
+KIRA_PRO_MODEL = os.environ.get("KIRA_PRO_MODEL", "kira-3.5-pro").strip()
 
-        <div class="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800 text-center">
-            <p class="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Don't have an account? <button onclick="authShow('email')" class="font-bold text-zinc-900 dark:text-white underline">Sign up</button></p>
-            <p class="text-xs text-zinc-400 mt-1">It's free and takes 10 seconds.</p>
-            <button onclick="authGuest()" class="mt-3 text-sm font-bold text-zinc-600 dark:text-zinc-300 hover:underline">Use without an account</button>
-        </div>
-    </div>
-</div>
+GEMINI_LIVE_MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.8-live").strip() or "gemini-3.8-live"
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
+GROQ_WHISPER_MODEL = os.environ.get("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo").strip() or "whisper-large-v3-turbo"
+GROQ_CHAT_MODEL = os.environ.get("GROQ_CHAT_MODEL", "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b"
+LIVE_SYSTEM_INSTRUCTION = (
+    "You are Beast AI, a friendly, helpful real-time voice assistant. "
+    "Beast AI was created by Chiranth when he was in 8th grade. If asked who created you, answer simply and accurately. "
+    "Speak naturally, keep answers concise, allow the user to interrupt, and never claim to have performed an action you did not perform."
+)
 
-    <div id="bg-light-aurora"></div>
-    <div id="aurora-container"></div>
+# Images use Cloudflare Workers AI (FLUX.1 Schnell) so image generation can
+# use Cloudflare's free daily allocation instead of fal.ai credits.
+CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+CLOUDFLARE_API_TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+CLOUDFLARE_IMAGE_MODEL = os.environ.get(
+    "CLOUDFLARE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell"
+).strip()
+# Video generation uses API Pass exclusively. Keep this key in deployment secrets,
+# never in index.html or any client-side JavaScript.
+APIPASS_API_KEY = os.environ.get("APIPASS_API_KEY", "").strip()
+APIPASS_BASE_URL = os.environ.get("APIPASS_BASE_URL", "https://api.apipass.dev/api/v1").strip().rstrip("/")
+APIPASS_CHANNEL = os.environ.get("APIPASS_CHANNEL", "auto").strip().lower()
+if APIPASS_CHANNEL not in {"auto", "starter", "regular", "official"}:
+    APIPASS_CHANNEL = "auto"
 
-    <div id="name-modal" class="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center hidden backdrop-blur-md px-4 transition-opacity">
-        <div class="bg-white dark:bg-[#1e1e20] p-6 sm:p-8 rounded-3xl shadow-2xl max-w-sm w-full border border-zinc-200 dark:border-zinc-800">
-            <div class="flex justify-center mb-4"><img src="/beast_ai.png" class="w-16 h-16 rounded-full shadow-md object-cover bg-black"></div>
-            <h3 class="text-xl font-bold text-center text-zinc-900 dark:text-white mb-2">Initialize Beast AI</h3>
-            <p class="text-sm text-center text-zinc-500 dark:text-zinc-400 mb-6 font-medium">By what name shall the Beast address you?</p>
-            <input type="text" id="name-input" onkeydown="if(event.key === 'Enter') saveName()" class="w-full bg-zinc-100 dark:bg-[#0e0e11] text-zinc-900 dark:text-white border-none rounded-xl px-4 py-3.5 mb-6 outline-none focus:ring-2 focus:ring-zinc-400 font-semibold text-center" placeholder="Enter your name...">
-            <button onclick="saveName()" class="w-full bg-zinc-900 hover:bg-black dark:bg-white text-white dark:text-black font-bold py-3.5 rounded-xl transition-transform active:scale-95 shadow-lg">Confirm</button>
-        </div>
-    </div>
-
-    <div id="settings-modal" class="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center hidden backdrop-blur-md px-4 transition-opacity">
-        <div class="bg-white dark:bg-[#1e1e20] p-6 sm:p-8 rounded-3xl shadow-2xl max-w-sm w-full border border-zinc-200 dark:border-zinc-800 relative">
-            <button onclick="closeSettings()" class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
-            <div class="flex justify-center mb-4">
-                <div class="w-14 h-14 rounded-full bg-zinc-100 dark:bg-[#0e0e11] flex items-center justify-center text-zinc-600 dark:text-zinc-300 shadow-sm border border-zinc-200 dark:border-zinc-800"><i data-lucide="user" class="w-6 h-6"></i></div>
-            </div>
-            <h3 class="text-xl font-bold text-center text-zinc-900 dark:text-white mb-6">Settings</h3>
-            <div class="mb-6">
-                <label class="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 pl-1">Your Name</label>
-                <input type="text" id="settings-name-input" onkeydown="if(event.key === 'Enter') saveSettings()" class="w-full bg-zinc-100 dark:bg-[#0e0e11] text-zinc-900 dark:text-white border-none rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-zinc-400 font-semibold" placeholder="Enter your name...">
-            </div>
-            <button onclick="saveSettings()" class="w-full bg-zinc-900 hover:bg-black dark:bg-white text-white dark:text-black font-bold py-3.5 rounded-xl transition-transform active:scale-95 shadow-lg">Save Changes</button>
-        </div>
-    </div>
-
-    <div id="mobile-overlay" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/40 z-40 hidden lg:hidden backdrop-blur-sm transition-opacity pt-safe"></div>
-
-    <aside id="mobile-sidebar" class="fixed inset-y-0 left-0 w-72 bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-xl z-50 transform -translate-x-full transition-transform duration-300 flex flex-col pt-safe lg:hidden border-r border-black/5 dark:border-white/5 pb-safe">
-        <div class="flex items-center justify-between p-4 mb-2">
-            <button onclick="toggleMobileSidebar()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-800 dark:text-zinc-200 rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="menu"></i></button>
-            <button onclick="startNewChat()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-800 dark:text-zinc-200 rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="edit"></i></button>
-        </div>
-        <div class="flex-1 overflow-y-auto px-3 sidebar-scroll border-t border-black/5 dark:border-white/5 pt-4">
-            <div class="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-2 pl-3">Recent</div>
-            <nav id="history-list-mobile" class="space-y-1 font-medium"></nav>
-        </div>
-        <div class="p-3 border-t border-black/5 dark:border-white/5 flex flex-col gap-1">
-            <button onclick="authLogout()" class="auth-logout-btn flex items-center gap-3 p-3 w-full rounded-full text-sm font-semibold hover:bg-black/5 dark:hover:bg-white/10 transition text-zinc-800 dark:text-zinc-200"><i data-lucide="log-out"></i> <span class="auth-logout-text">Log out</span></button>
-            <button onclick="openSettings()" class="flex items-center gap-3 p-3 w-full rounded-full text-sm font-semibold hover:bg-black/5 dark:hover:bg-white/10 transition text-zinc-800 dark:text-zinc-200"><i data-lucide="settings"></i> <span>Settings</span></button>
-            <button onclick="toggleTheme()" class="flex items-center gap-3 p-3 w-full rounded-full text-sm font-semibold hover:bg-black/5 dark:hover:bg-white/10 transition text-zinc-800 dark:text-zinc-200"><i data-lucide="moon" id="theme-icon-mobile"></i> <span id="theme-text-mobile">Dark Mode</span></button>
-            <button onclick="clearUnpinned()" class="flex items-center gap-3 p-3 w-full rounded-full text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 mt-1 transition"><i data-lucide="trash-2"></i> Clear History</button>
-        </div>
-    </aside>
-
-    <aside id="desktop-sidebar" class="desktop-sidebar hidden lg:flex flex-col bg-white/80 dark:bg-[#1e1e20]/80 backdrop-blur-2xl border-r border-black/5 dark:border-white/5 z-40 h-full fixed left-0 top-0 py-4 group">
-        <div class="px-3 mb-8 flex items-center"><button onclick="toggleDesktopSidebar()" class="w-[44px] h-[44px] rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center flex-shrink-0 text-zinc-800 dark:text-zinc-200 transition-colors"><i data-lucide="menu"></i></button></div>
-        <div class="px-3 mb-6 flex flex-col gap-2">
-            <button onclick="startNewChat()" class="sidebar-btn bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition-colors text-zinc-900 dark:text-white">
-                <div class="sidebar-icon"><i data-lucide="plus"></i></div><span class="nav-text text-sm font-bold ml-1">New chat</span>
-            </button>
-        </div>
-        <div class="flex-1 overflow-y-auto px-3 sidebar-scroll">
-            <div class="nav-text text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-2 pl-3">Recent</div>
-            <nav id="history-list-desktop" class="space-y-1 font-medium"></nav>
-        </div>
-        <div class="px-3 mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex flex-col gap-2">
-            <button onclick="clearUnpinned()" class="sidebar-btn hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-600"><div class="sidebar-icon"><i data-lucide="trash-2"></i></div><span class="nav-text text-sm font-semibold ml-1">Clear All</span></button>
-            <button onclick="authLogout()" class="auth-logout-btn sidebar-btn hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-800 dark:text-zinc-200"><div class="sidebar-icon"><i data-lucide="log-out"></i></div><span class="nav-text text-sm font-semibold ml-1 auth-logout-text">Log out</span></button>
-            <button onclick="openSettings()" class="sidebar-btn hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-800 dark:text-zinc-200"><div class="sidebar-icon"><i data-lucide="settings"></i></div><span class="nav-text text-sm font-semibold ml-1">Settings</span></button>
-            <button onclick="toggleFullScreen()" class="sidebar-btn hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-800 dark:text-zinc-200"><div class="sidebar-icon"><i data-lucide="maximize" id="fs-icon-desktop"></i></div><span class="nav-text text-sm font-semibold ml-1" id="fs-text-desktop">Fullscreen</span></button>
-            <button onclick="toggleTheme()" class="sidebar-btn hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-800 dark:text-zinc-200"><div class="sidebar-icon"><i data-lucide="moon" id="theme-icon-desktop"></i></div><span class="nav-text text-sm font-semibold ml-1" id="theme-text-desktop">Dark Mode</span></button>
-        </div>
-    </aside>
-
-    <div id="main-content" class="main-content-shift flex-1 flex flex-col min-w-0 relative bg-transparent pt-safe z-10 h-full">
-        <header class="flex items-center px-4 py-2 lg:hidden relative z-10 bg-transparent flex-shrink-0">
-            <button onclick="toggleMobileSidebar()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-900 dark:text-white rounded-full"><i data-lucide="menu"></i></button>
-            <h1 class="ml-2 text-lg font-black tracking-widest uppercase text-zinc-900 dark:text-white font-beast-logo">Beast</h1>
-            <div class="flex-1"></div>
-            <button onclick="toggleFullScreen()" class="w-[44px] h-[44px] flex items-center justify-center text-zinc-900 dark:text-white rounded-full"><i data-lucide="maximize" id="fs-icon-mobile"></i></button>
-        </header>
-        
-        <main id="scroll-container" class="flex-1 overflow-y-auto px-4 sm:px-8 pb-36 sm:pb-48 custom-scrollbar relative z-10">
-            <div class="max-w-3xl mx-auto space-y-8 mt-4 sm:mt-10">
-                <div id="welcome-box" class="w-full mx-auto text-center flex flex-col items-center justify-center mt-[12vh] sm:mt-[15vh]">
-                    <img src="/beast_ai.png" class="w-16 h-16 sm:w-20 sm:h-20 mb-6 object-cover rounded-full shadow-lg shadow-black/10 dark:shadow-white/5 animate-pulse bg-black" alt="Beast AI">
-                    <h2 id="greeting-text" class="text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 pb-2 drop-shadow-md"></h2>
-                </div>
-                <div id="chat-box" class="w-full space-y-2 hidden flex-col pb-10 py-4"></div>
-            </div>
-        </main>
-    </div>
-
-    <!-- 🚀 FIXED PILL WRAPPER: Perfectly bounds to remaining screen width for true mx-auto centering -->
-    <div id="pill-wrapper" class="pill-wrapper fixed bottom-0 z-30 pb-safe pointer-events-none right-0">
-        <div class="max-w-3xl mx-auto px-3 sm:px-4 pb-2 pt-4 pointer-events-auto">
-            
-            <div id="attachment-preview" class="hidden relative ml-4 mb-3 flex gap-2 overflow-x-auto custom-scrollbar max-w-full"></div>
-            
-            <div class="relative flex items-end w-full bg-white/95 dark:bg-[#1e1e20]/95 backdrop-blur-md rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_4px_25px_rgb(0,0,0,0.12)] dark:shadow-[0_4px_25px_rgb(0,0,0,0.6)] p-1.5 sm:p-2 border border-zinc-200 dark:border-zinc-700/80">
-                
-                <div class="relative z-40 flex-shrink-0">
-                    <button id="attach-dropdown-btn" onclick="toggleAttachDropdown(event)" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full mb-0.5 sm:mb-1">
-                        <i data-lucide="plus" id="plus-icon" class="w-5 h-5 transition-transform duration-300"></i>
-                    </button>
-                    <div id="attach-dropdown-menu" class="absolute bottom-[calc(100%+0.8rem)] left-0 w-[230px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden flex-col transform origin-bottom-left transition-all p-1.5">
-<button onclick="document.getElementById('file-input').click(); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
-                            <i data-lucide="upload" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
-                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Upload file</span>
-                        </button>
-                        <button onclick="setGenMode('image'); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
-                            <i data-lucide="image" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
-                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Image Generation</span>
-                        </button>
-                        <button onclick="setGenMode('video'); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
-                            <i data-lucide="video" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
-                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Video Generation</span>
-                        </button>
-                        <button onclick="setGenMode('video-fast'); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
-                            <i data-lucide="zap" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
-                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Video Generation - Fast</span>
-                        </button>
-                    </div>
-                </div>
-
-                <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf" multiple onchange="handleFile(this)">
-                <textarea id="user-input" rows="1" class="flex-1 min-w-0 bg-transparent border-none outline-none resize-none max-h-[140px] py-2 px-2 sm:py-2.5 sm:px-3 text-[15px] sm:text-base text-zinc-900 dark:text-white placeholder-zinc-500 font-medium leading-relaxed mb-0.5 sm:mb-1 overflow-y-hidden" placeholder="Ask Beast..." onkeydown="handleEnter(event)" oninput="checkInput()"></textarea>
-                
-                <div class="flex items-center gap-1 sm:gap-1.5 pr-1 flex-shrink-0 mb-[0.15rem] sm:mb-[0.30rem]">
-                    <div id="speed-selector-wrap" class="relative z-40">
-                        <button id="speed-dropdown-btn" onclick="toggleSpeedDropdown(event)" class="h-9 sm:h-10 flex items-center gap-1.5 px-3 bg-zinc-100 dark:bg-[#2e2e31] rounded-2xl hover:bg-zinc-200 dark:hover:bg-[#3a3a3d] transition-colors text-zinc-700 dark:text-zinc-300">
-                            <span id="current-speed-label" class="text-xs sm:text-sm font-semibold tracking-wide">Normal</span>
-                            <i data-lucide="chevron-down" class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300" id="speed-chevron"></i>
-                        </button>
-                        <div id="speed-dropdown-menu" class="absolute bottom-[calc(100%+0.8rem)] right-0 w-[200px] sm:w-[220px] bg-white dark:bg-[#252528] border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden flex-col transform origin-bottom-right transition-all">
-                            <button onclick="setSpeed('fast')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="fast">
-                                <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
-                                <div><div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Fast</div><div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Answers quickly</div></div>
-                            </button>
-                            <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
-                            <button onclick="setSpeed('normal')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="normal">
-                                <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-100 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
-                                <div><div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">Normal</div><div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Answers at a normal speed</div></div>
-                            </button>
-                            <div class="h-[1px] w-full bg-black/5 dark:bg-white/5"></div>
-                            <button onclick="setSpeed('pro')" class="speed-option w-full text-left px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 relative" data-speed="pro">
-                                <div class="w-5 flex justify-center mt-0.5 check-icon text-zinc-900 dark:text-white opacity-0 transition-opacity"><i data-lucide="check" class="w-4 h-4"></i></div>
-                                <div><div class="text-[14px] font-bold text-zinc-900 dark:text-white leading-tight">PRO</div><div class="text-[12px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">Thinks for more time</div></div>
-                            </button>
-                        </div>
-                    </div>
-                    <button id="mic-btn" onclick="toggleMic()" class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full flex-shrink-0" title="Dictate a message"><i data-lucide="mic" class="w-5 h-5"></i></button>
-                    <button id="send-btn" onclick="sendMessage()" class="hidden w-9 h-9 sm:w-10 sm:h-10 items-center justify-center bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black rounded-full transition-transform active:scale-95 shadow-sm flex-shrink-0"><i data-lucide="arrow-up" class="w-5 h-5"></i></button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        lucide.createIcons();
-        let currentMode = 'chat'; let currentSpeed = 'normal'; let attachedFiles = []; let currentSessionId = null;
-        let userName = localStorage.getItem('beast-username'); let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
-        let freshChatLiveEligible = true;
+APIPASS_VEO_QUALITY_MODEL = "google/veo-3-1-quality"
+APIPASS_VEO_FAST_MODEL = "google/veo-3-1-fast"
+APIPASS_VIDEO_RESOLUTION = "1080p"
+# Veo 3.1 requires 8 seconds when requesting 1080p output.
+APIPASS_VIDEO_DURATION = "8"
 
 
-        function escapeHTML(value) {
-            return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[ch]));
-        }
-
-        function safeMediaURL(value) {
-            try {
-                const url = new URL(String(value || ""));
-                return (url.protocol === "https:" || url.protocol === "http:") ? url.href : "";
-            } catch (_) { return ""; }
-        }
-
-        function processMedia(text) {
-            if (!text) return "";
-            // Raw video URLs are made playable when the provider supplies a direct media file URL.
-            return String(text).replace(/https?:\/\/[^\s<>"']+\.(?:mp4|webm|mov)(?:\?[^\s<>"']*)?(?:#[^\s<>"']*)?/gi, url =>
-                `<video src="${escapeHTML(url)}" controls playsinline preload="metadata" class="w-full rounded-xl shadow-md my-3 border border-black/5 dark:border-white/10"></video>`
-            );
-        }
-
-        function responseToDisplayText(data, mode) {
-            const directURL = safeMediaURL(data && data.media_url);
-            let result = (data && typeof data.reply === "string") ? data.reply : "The backend returned an empty response.";
-            if (directURL && data.media_type === "image") {
-                result = `![Generated image](<${directURL}>)`;
-                if (data.note) result += `\n\n${data.note}`;
-            } else if (directURL && data.media_type === "video") {
-                result = `<video src="${escapeHTML(directURL)}" controls playsinline preload="metadata" class="w-full rounded-xl shadow-md my-3 border border-black/5 dark:border-white/10"></video>\n\n[Open generated video in a new tab](${directURL})`;
-                if (data.note) result += `\n\n${data.note}`;
-            } else if (data && data.notice) {
-                result += `\n\n${data.notice}`;
-            }
-            return result;
-        }
-
-        async function waitForMediaJob(initialData, msgId) {
-            let job = initialData;
-            const provider = String(job.provider || '');
-            const maxAttempts = provider === 'JSON2Video' ? 60 : 45;
-            for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                const loader = document.getElementById(`loader-${msgId}`);
-                if (loader) {
-                    const statusText = job.reply || (provider === 'JSON2Video' ? 'Rendering your video… 🎬' : 'Generating media…');
-                    loader.innerHTML = `<div class="text-sm text-zinc-500 dark:text-zinc-400 py-2">${escapeHTML(statusText)}</div><div class="jumping-dots text-zinc-500 dark:text-zinc-400 py-1"><span></span><span></span><span></span></div>`;
-                }
-                await new Promise(resolve => setTimeout(resolve, 4000));
-                const statusController = new AbortController();
-                const statusTimer = setTimeout(() => statusController.abort(), 25000);
-                let response;
-                try {
-                    response = await fetch('https://beast-ai-v2.onrender.com/api/media/status', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: statusController.signal,
-                    body: JSON.stringify({
-                        mode: job.mode || currentMode,
-                        request_id: job.request_id,
-                        provider: job.provider
-                    })
-                    });
-                } finally { clearTimeout(statusTimer); }
-                job = await response.json().catch(() => ({ reply: `Media status request failed (HTTP ${response.status}). ⚠️`, error: true }));
-                if (!response.ok && !job.reply) job.reply = `Media status request failed (HTTP ${response.status}). ⚠️`;
-                if (!job.media_pending) return job;
-            }
-            return { reply: 'This video is still rendering. Please wait a little longer and check your JSON2Video dashboard if it does not appear. ⏳', error: true };
-        }
-
-        function renderMarkdown(text) {
-            // Generated images get a dedicated download control immediately below the image.
-            const sourceText = String(text || "").replace(/!\[([^\]]*)\]\(<?(https?:\/\/[^\s)>]+|\/api\/media\/image\?[^\s)>]+)>?\)/g,
-                (_, alt, url) => `<figure class="generated-image-wrap my-4 flex flex-col items-start gap-3"><img src="${escapeHTML(url)}" alt="${escapeHTML(alt || 'Generated image')}" class="max-w-full h-auto rounded-xl shadow-md border border-black/5 dark:border-white/10" loading="lazy"><a href="${escapeHTML(url)}" download="beast-ai-generated-image.png" target="_blank" rel="noopener noreferrer" class="generated-image-download inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-black dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-black text-sm font-semibold transition-colors"><i data-lucide="download" class="w-4 h-4"></i> Download image</a></figure>`);
-            const html = marked.parse(processMedia(sourceText));
-            if (window.DOMPurify) {
-                return window.DOMPurify.sanitize(html, {
-                    ADD_TAGS: ["video", "source", "figure", "img", "i"],
-                    ADD_ATTR: ["controls", "playsinline", "preload", "autoplay", "loop", "src", "alt", "loading", "download", "target", "rel", "class", "data-lucide"]
-                });
-            }
-            return `<p>${escapeHTML(sourceText).replace(/\n/g, "<br>")}</p>`;
-        }
-
-        function checkInput() {
-            const inputField = document.getElementById('user-input');
-            const sendBtn = document.getElementById('send-btn');
-            inputField.style.height = 'auto';
-            const fullHeight = inputField.scrollHeight;
-            inputField.style.height = Math.min(fullHeight, 140) + 'px';
-            inputField.style.overflowY = fullHeight > 140 ? 'auto' : 'hidden';
-            const hasDraft = inputField.value.trim().length > 0 || attachedFiles.length > 0;
-            if (inputField.value.trim().length > 0 || attachedFiles.length > 0) freshChatLiveEligible = false;
-            if (hasDraft) { sendBtn.classList.remove('hidden'); sendBtn.classList.add('flex'); }
-            else { sendBtn.classList.add('hidden'); sendBtn.classList.remove('flex'); }
-            
-        }
-
-        let isAttachMenuOpen = false;
-        function toggleAttachDropdown(e) {
-            if(e) e.stopPropagation();
-            isAttachMenuOpen = !isAttachMenuOpen;
-            const menu = document.getElementById('attach-dropdown-menu'); const icon = document.getElementById('plus-icon');
-            if(isAttachMenuOpen) { menu.classList.remove('hidden'); menu.classList.add('flex'); icon.style.transform = 'rotate(45deg)'; } 
-            else { menu.classList.add('hidden'); menu.classList.remove('flex'); icon.style.transform = 'rotate(0deg)'; }
-        }
-
-        function setGenMode(type) {
-            currentMode = ['chat', 'image', 'video', 'video-fast'].includes(type) ? type : 'chat';
-            const input = document.getElementById('user-input');
-            const placeholders = {
-                chat: 'Ask Beast...',
-                image: 'Describe the image you want to generate...',
-                video: 'Describe the video you want to generate...',
-                'video-fast': 'Describe the video you want to generate quickly...'
-            };
-            input.placeholder = placeholders[currentMode];
-            renderAttachmentPreviews();
-            checkInput();
-            if (currentMode === 'chat') 
-            input.focus();
-        }
-
-        let recognition; let isRecording = false;
-        function toggleMic() {
-            const micBtn = document.getElementById('mic-btn'); const inputField = document.getElementById('user-input');
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) { alert("The Beast's ears are blocked! 🦖 (Try Chrome!)"); return; }
-            if (isRecording) { recognition.stop(); return; }
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; recognition = new SpeechRecognition();
-            recognition.continuous = false; recognition.interimResults = true; recognition.lang = 'en-US';
-            let originalValue = inputField.value;
-            recognition.onstart = () => { isRecording = true; micBtn.innerHTML = '<i data-lucide="mic" class="w-5 h-5 animate-pulse text-red-500"></i>'; lucide.createIcons(); };
-            recognition.onresult = (event) => {
-                let interimTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) { originalValue += (originalValue ? ' ' : '') + event.results[i][0].transcript; inputField.value = originalValue; } 
-                    else { interimTranscript += event.results[i][0].transcript; inputField.value = originalValue + (originalValue ? ' ' : '') + interimTranscript; }
-                }
-                checkInput();
-            };
-            recognition.onerror = () => { stopMicUI(); }; recognition.onend = () => { stopMicUI(); inputField.focus(); }; recognition.start();
-        }
-        function stopMicUI() { isRecording = false; document.getElementById('mic-btn').innerHTML = '<i data-lucide="mic" class="w-5 h-5"></i>'; lucide.createIcons(); }
-        function toggleFullScreen() { if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(() => {}); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
-        document.addEventListener('fullscreenchange', () => { const isFS = !!document.fullscreenElement; document.getElementById('fs-icon-mobile').setAttribute('data-lucide', isFS ? 'minimize' : 'maximize'); document.getElementById('fs-icon-desktop').setAttribute('data-lucide', isFS ? 'minimize' : 'maximize'); document.getElementById('fs-text-desktop').innerText = isFS ? 'Exit Fullscreen' : 'Fullscreen'; lucide.createIcons(); });
-
-        let isSpeedMenuOpen = false;
-        function toggleSpeedDropdown(e) {
-            if(e) e.stopPropagation(); isSpeedMenuOpen = !isSpeedMenuOpen;
-            const menu = document.getElementById('speed-dropdown-menu'); const icon = document.getElementById('speed-chevron');
-            if(isSpeedMenuOpen) { menu.classList.remove('hidden'); menu.classList.add('flex'); icon.style.transform = 'rotate(180deg)'; } 
-            else { menu.classList.add('hidden'); menu.classList.remove('flex'); icon.style.transform = 'rotate(0deg)'; }
-        }
-        window.onclick = function(e) {
-            if(isSpeedMenuOpen && !e.target.closest('#speed-selector-wrap')) { isSpeedMenuOpen = false; document.getElementById('speed-dropdown-menu').classList.add('hidden'); document.getElementById('speed-dropdown-menu').classList.remove('flex'); document.getElementById('speed-chevron').style.transform = 'rotate(0deg)'; }
-            if(isAttachMenuOpen && !e.target.closest('#attach-dropdown-btn') && !e.target.closest('#attach-dropdown-menu')) { isAttachMenuOpen = false; document.getElementById('attach-dropdown-menu').classList.add('hidden'); document.getElementById('attach-dropdown-menu').classList.remove('flex'); document.getElementById('plus-icon').style.transform = 'rotate(0deg)'; }
-        }
-
-        function setSpeed(s) {
-            currentSpeed = s; const labels = { 'fast': 'Fast', 'normal': 'Normal', 'pro': 'PRO' };
-            document.getElementById('current-speed-label').innerText = labels[s];
-            document.querySelectorAll('.speed-option').forEach(btn => {
-                if(btn.dataset.speed === s) { btn.querySelector('.check-icon').classList.remove('opacity-0'); btn.querySelector('.check-icon').classList.add('opacity-100'); } 
-                else { btn.querySelector('.check-icon').classList.add('opacity-0'); btn.querySelector('.check-icon').classList.remove('opacity-100'); }
-            });
-            isSpeedMenuOpen = false; document.getElementById('speed-dropdown-menu').classList.add('hidden'); document.getElementById('speed-dropdown-menu').classList.remove('flex'); document.getElementById('speed-chevron').style.transform = 'rotate(0deg)';
-        }
-
-        window.onload = () => { 
-            // 🚀 CLOUDFLARE WAKEUP PING
-            fetch('https://beast-ai-v2.onrender.com/api/health').catch(() => {});
-            if(localStorage.getItem('beast-theme') === 'dark') document.body.classList.add('dark'); else if (localStorage.getItem('beast-theme') === 'light') document.body.classList.remove('dark');
-            const isDark = document.body.classList.contains('dark');
-            document.getElementById('theme-icon-desktop').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-desktop').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
-            document.getElementById('theme-icon-mobile').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-mobile').innerText = isDark ? 'Light Mode' : 'Dark Mode'; 
-            lucide.createIcons(); initDesktopSidebar(); loadHistory(); initName(); checkInput(); 
-        };
-
-        // Groq Whisper voice mode: record one spoken turn, transcribe it server-side,
-        // send the transcript through the existing Beast chat, and speak the reply with browser TTS.
-        const LIVE_TRANSCRIBE_ENDPOINT = "https://beast-ai-v2.onrender.com/api/live/transcribe";
-        let liveStarting = false, liveActive = false, liveProcessing = false;
-        let liveRecorder = null, liveStream = null, liveChunks = [], liveStopTimer = null, liveGeneration = 0;
-        let liveTranscriptEntries = [], liveLastTranscriptEntry = null, liveLastTranscriptRole = null;
-        let lastSentReplyText = '';
-
-        function setLiveStatus(text) {
-            const status = document.getElementById('live-status');
-            if (status) status.textContent = text;
-        }
-
-        function showLiveTranscriptPlaceholder() {
-            const target = document.getElementById('live-transcript');
-            target.innerHTML = '<p id="live-empty-state" class="text-center text-sm text-zinc-400 py-10">Speak naturally, then tap Finish speaking. Beast AI will transcribe your voice and reply aloud. 🎙️</p>';
-            liveTranscriptEntries = []; liveLastTranscriptEntry = null; liveLastTranscriptRole = null;
-        }
-
-        function addLiveTranscript(role, rawText) {
-            const text = String(rawText || '').trim();
-            if (!text) return;
-            const target = document.getElementById('live-transcript');
-            const empty = document.getElementById('live-empty-state');
-            if (empty) empty.remove();
-            const row = document.createElement('div');
-            row.className = role === 'user' ? 'ml-auto max-w-[90%] rounded-2xl rounded-tr-sm bg-indigo-50 dark:bg-indigo-950/50 px-4 py-3' : 'mr-auto max-w-[90%] rounded-2xl rounded-tl-sm bg-zinc-100 dark:bg-zinc-800 px-4 py-3';
-            const label = document.createElement('div');
-            label.className = 'text-[10px] font-extrabold uppercase tracking-widest mb-1 text-zinc-500 dark:text-zinc-400';
-            label.textContent = role === 'user' ? 'YOU' : 'BEAST AI';
-            const body = document.createElement('div');
-            body.className = 'text-sm leading-relaxed whitespace-pre-wrap break-words'; body.textContent = text;
-            row.append(label, body); target.appendChild(row); target.scrollTop = target.scrollHeight;
-            liveTranscriptEntries.push({ role, text }); liveLastTranscriptEntry = { role, text, body }; liveLastTranscriptRole = role;
-        }
-
-        function closeGroqLiveOverlay() {
-            liveGeneration += 1;
-            if (liveRecorder && liveRecorder.state === 'recording') { liveRecorder.onstop = null; try { liveRecorder.stop(); } catch (_) {} }
-            const overlay = document.getElementById('live-overlay');
-            overlay.classList.add('hidden'); overlay.classList.remove('flex');
-            if (liveStopTimer) { clearTimeout(liveStopTimer); liveStopTimer = null; }
-            if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
-            liveRecorder = null; liveChunks = []; liveStarting = false; liveActive = false; liveProcessing = false;
-            const btn = document.getElementById('live-end-btn');
-            btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = 'Finish speaking'; btn.onclick = stopGroqLive;
-            if (!currentSessionId) freshChatLiveEligible = true;
-            checkInput(); 
-        }
-
-        async function startGroqLive() {
-            if (liveStarting || liveActive || liveProcessing || !freshChatLiveEligible || currentSessionId || currentMode !== 'chat') return;
-            if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-                alert('Voice mode needs a supported browser and a secure HTTPS page. Try Chrome. 🎙️'); return;
-            }
-            liveStarting = true; freshChatLiveEligible = false; 
-            showLiveTranscriptPlaceholder();
-            const overlay = document.getElementById('live-overlay'); overlay.classList.remove('hidden'); overlay.classList.add('flex');
-            setLiveStatus('Requesting microphone access…');
-            const endBtn = document.getElementById('live-end-btn'); endBtn.disabled = true; endBtn.classList.add('opacity-60');
-            const generation = ++liveGeneration;
-            try {
-                liveStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-                const mimeOptions = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-                const mimeType = mimeOptions.find(type => MediaRecorder.isTypeSupported(type)) || '';
-                liveRecorder = mimeType ? new MediaRecorder(liveStream, { mimeType }) : new MediaRecorder(liveStream);
-                liveChunks = [];
-                liveRecorder.ondataavailable = event => { if (event.data && event.data.size) liveChunks.push(event.data); };
-                liveRecorder.onerror = event => { setLiveStatus('Microphone recording failed. Please try again.'); console.error('MediaRecorder error:', event.error); };
-                liveRecorder.onstop = () => processGroqRecording(generation);
-                liveRecorder.start(1000);
-                liveStarting = false; liveActive = true;
-                endBtn.disabled = false; endBtn.classList.remove('opacity-60'); endBtn.textContent = 'Finish speaking'; endBtn.onclick = stopGroqLive;
-                setLiveStatus('Listening… finish your sentence and tap Finish speaking.');
-                // Vercel serverless request limits make shorter voice turns more reliable.
-                liveStopTimer = setTimeout(() => { if (liveRecorder && liveRecorder.state === 'recording') stopGroqLive(); }, 45000);
-            } catch (error) {
-                console.error('Groq voice recording could not start:', error);
-                setLiveStatus(error?.message || 'Could not access the microphone.');
-                liveStarting = false; liveActive = false;
-                if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
-                const btn = document.getElementById('live-end-btn'); btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = 'Close'; btn.onclick = closeGroqLiveOverlay;
-                freshChatLiveEligible = true; 
-            }
-        }
-
-        function stopGroqLive() {
-            if (liveStopTimer) { clearTimeout(liveStopTimer); liveStopTimer = null; }
-            if (!liveRecorder || liveRecorder.state !== 'recording') {
-                if (!liveProcessing) closeGroqLiveOverlay();
-                return;
-            }
-            liveActive = false; liveProcessing = true;
-            setLiveStatus('Transcribing your voice…');
-            const btn = document.getElementById('live-end-btn'); btn.disabled = true; btn.classList.add('opacity-60'); btn.textContent = 'Processing…';
-            try { liveRecorder.stop(); } catch (error) { liveProcessing = false; closeGroqLiveOverlay(); alert('Could not stop the recording. Please retry. 🎙️'); }
-        }
-
-        async function processGroqRecording(generation) {
-            try {
-                if (generation !== liveGeneration) return;
-                if (liveStopTimer) { clearTimeout(liveStopTimer); liveStopTimer = null; }
-                const recorder = liveRecorder;
-                const mimeType = recorder?.mimeType || liveChunks[0]?.type || 'audio/webm';
-                const extension = mimeType.includes('ogg') ? 'ogg' : (mimeType.includes('mp4') ? 'mp4' : 'webm');
-                const blob = new Blob(liveChunks, { type: mimeType });
-                if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
-                liveRecorder = null; liveChunks = [];
-                if (!blob.size) throw new Error('No audio was recorded. Please try again.');
-                setLiveStatus('Transcribing your voice…');
-                const form = new FormData();
-                form.append('audio', blob, `beast-voice.${extension}`);
-                const response = await fetch(LIVE_TRANSCRIBE_ENDPOINT, { method: 'POST', body: form });
-                const data = await response.json().catch(() => ({}));
-                if (!response.ok || !data.text) throw new Error(data.error || `Voice transcription failed (HTTP ${response.status}). Please try again.`);
-                if (generation !== liveGeneration) return;
-                const transcript = String(data.text).trim();
-                if (!transcript) throw new Error('No speech detected. Please speak more clearly and retry.');
-                addLiveTranscript('user', transcript);
-                setLiveStatus('Beast AI is preparing a reply…');
-                const input = document.getElementById('user-input');
-                input.value = transcript;
-                currentMode = 'chat';
-                checkInput();
-                // Use the regular chat route, model selector, creator rule, and history logic.
-                const overlay = document.getElementById('live-overlay'); overlay.classList.add('hidden'); overlay.classList.remove('flex');
-                if (generation !== liveGeneration) return;
-                liveProcessing = false;
-                const reply = await sendMessage();
-                if (reply && 'speechSynthesis' in window) {
-                    const spoken = String(reply).replace(/```[\s\S]*?```/g, ' code block omitted ').replace(/<[^>]*>/g, ' ').replace(/[#*_`>]/g, ' ').replace(/https?:\/\/\S+/g, ' link ').slice(0, 1800).trim();
-                    if (spoken) {
-                        window.speechSynthesis.cancel();
-                        const utterance = new SpeechSynthesisUtterance(spoken);
-                        utterance.lang = 'en-IN'; utterance.rate = 1; utterance.pitch = 1;
-                        window.speechSynthesis.speak(utterance);
-                    }
-                }
-            } catch (error) {
-                if (generation !== liveGeneration) return;
-                console.error('Groq Whisper voice round-trip failed:', error);
-                setLiveStatus(error?.message || 'Voice transcription failed.');
-                const overlay = document.getElementById('live-overlay'); overlay.classList.remove('hidden'); overlay.classList.add('flex');
-                const btn = document.getElementById('live-end-btn'); btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = 'Close'; btn.onclick = closeGroqLiveOverlay;
-                if (!currentSessionId) freshChatLiveEligible = true;
-            } finally {
-                if (generation === liveGeneration) {
-                    if (liveProcessing) liveProcessing = false;
-                    liveStarting = false; liveActive = false;
-                    if (liveStream) { liveStream.getTracks().forEach(track => track.stop()); liveStream = null; }
-                    
-                }
-            }
-        }
-
-        function initName() { if (!userName) { document.getElementById('name-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('name-input').focus(), 100); } else { setGreeting(); } }
-        function saveName() { const input = document.getElementById('name-input').value.trim(); if (input) { userName = input.toUpperCase(); localStorage.setItem('beast-username', userName); document.getElementById('name-modal').classList.add('hidden'); setGreeting(); } }
-        function openSettings() { document.getElementById('settings-name-input').value = userName || ""; document.getElementById('settings-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('settings-name-input').focus(), 100); if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); } }
-        function closeSettings() { document.getElementById('settings-modal').classList.add('hidden'); }
-        function saveSettings() { const input = document.getElementById('settings-name-input').value.trim(); if (input) { userName = input.toUpperCase(); localStorage.setItem('beast-username', userName); setGreeting(); closeSettings(); } }
-        function setGreeting() { const nameToUse = userName || "MASTER"; const greetings = [`Ask away, ${nameToUse}!`, `The mic is yours, ${nameToUse}`, `Your move, ${nameToUse}!`]; document.getElementById('greeting-text').innerText = greetings[Math.floor(Math.random() * greetings.length)]; }
-        function initDesktopSidebar() { const sb = document.getElementById('desktop-sidebar'); const main = document.getElementById('main-content'); const pill = document.getElementById('pill-wrapper'); if (isDesktopSidebarLocked) { sb.classList.add('locked'); main.classList.add('locked'); pill.classList.add('locked'); } else { sb.classList.remove('locked'); main.classList.remove('locked'); pill.classList.remove('locked'); } }
-        function toggleDesktopSidebar() { isDesktopSidebarLocked = !isDesktopSidebarLocked; localStorage.setItem('beast-sidebar-locked', isDesktopSidebarLocked); initDesktopSidebar(); }
-        function toggleTheme() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('beast-theme', isDark ? 'dark' : 'light'); document.getElementById('theme-icon-mobile').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-mobile').innerText = isDark ? 'Light Mode' : 'Dark Mode'; document.getElementById('theme-icon-desktop').setAttribute('data-lucide', isDark ? 'sun' : 'moon'); document.getElementById('theme-text-desktop').innerText = isDark ? 'Light Mode' : 'Dark Mode'; lucide.createIcons(); }
-        function toggleMobileSidebar() { const sb = document.getElementById('mobile-sidebar'); const overlay = document.getElementById('mobile-overlay'); sb.classList.toggle('-translate-x-full'); overlay.classList.toggle('hidden'); }
-        function handleEnter(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
-        
-        function loadHistory() { const keys = Object.keys(localStorage).filter(k => k.startsWith('BeastSession_')).sort().reverse(); const mobileList = document.getElementById('history-list-mobile'); const desktopList = document.getElementById('history-list-desktop'); mobileList.innerHTML = ''; desktopList.innerHTML = ''; keys.forEach(id => { const session = JSON.parse(localStorage.getItem(id)); const preview = session.title || session.messages?.[0]?.message || "Manifestation"; const isCurrent = id === currentSessionId; const html = `<div class="sidebar-btn group p-0 hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap overflow-hidden ${isCurrent ? 'bg-black/5 dark:bg-white/10' : ''}"><div class="flex items-center flex-1 overflow-hidden h-full w-full" onclick="loadSession('${id}')"><div class="sidebar-icon text-zinc-500 flex-shrink-0"><i data-lucide="message-square" class="w-4 h-4"></i></div><div class="text-sm truncate nav-text text-zinc-900 dark:text-white font-semibold flex-1 text-left ml-1">${escapeHTML(preview)}</div></div><div class="flex items-center flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity pr-3 z-10 gap-1 nav-text"><button onclick="renameSession('${id}', event)" class="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button><button onclick="togglePin('${id}', event)" class="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors rounded-full hover:bg-black/5 dark:hover:bg-white/10"><i data-lucide="pin" class="w-3.5 h-3.5 ${session.pinned ? 'fill-current text-zinc-900 dark:text-white lg:opacity-100' : ''}"></i></button></div></div>`; mobileList.insertAdjacentHTML('beforeend', html); desktopList.insertAdjacentHTML('beforeend', html); }); lucide.createIcons(); }
-        function renameSession(id, e) { e.stopPropagation(); const session = JSON.parse(localStorage.getItem(id)); const currentName = session.title || session.messages?.[0]?.message || "Manifestation"; const newName = prompt("Rename this chat:", currentName); if (newName !== null && newName.trim() !== "") { session.title = newName.trim(); localStorage.setItem(id, JSON.stringify(session)); loadHistory(); } }
-        function clearUnpinned() { if(!confirm("Clear all history?")) return; const keys = Object.keys(localStorage).filter(k => k.startsWith('BeastSession_')); keys.forEach(id => { const s = JSON.parse(localStorage.getItem(id)); if(!s.pinned) localStorage.removeItem(id); }); startNewChat(); loadHistory(); }
-        function togglePin(id, e) { e.stopPropagation(); const s = JSON.parse(localStorage.getItem(id)); s.pinned = !s.pinned; localStorage.setItem(id, JSON.stringify(s)); loadHistory(); }
-        function loadSession(id) {
-            currentSessionId = id; freshChatLiveEligible = false; currentMode = 'chat';
-            document.getElementById('user-input').value = ''; document.getElementById('user-input').placeholder = 'Ask Beast...';
-            clearAllAttachments(); renderAttachmentPreviews();
-            const session = JSON.parse(localStorage.getItem(id));
-            document.getElementById('welcome-box').style.display = 'none';
-            const chatBox = document.getElementById('chat-box'); chatBox.innerHTML = ''; chatBox.classList.replace('hidden', 'flex');
-            (session.messages || []).forEach(m => appendHistoryMessage(m));
-            if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); }
-            loadHistory(); checkInput(); 
-        }
-        function startNewChat() {
-            if (liveActive || liveStarting || liveProcessing) closeGroqLiveOverlay();
-            currentSessionId = null; freshChatLiveEligible = true; currentMode = 'chat';
-            document.getElementById('user-input').value = ''; document.getElementById('user-input').placeholder = 'Ask Beast...';
-            clearAllAttachments();
-            document.getElementById('chat-box').innerHTML = ''; document.getElementById('chat-box').classList.replace('flex', 'hidden');
-            document.getElementById('welcome-box').style.display = 'flex';
-            if(window.innerWidth < 1024) { document.getElementById('mobile-sidebar').classList.add('-translate-x-full'); document.getElementById('mobile-overlay').classList.add('hidden'); }
-            renderAttachmentPreviews(); checkInput(); 
-        }
-
-        async function compressImage(file, maxWidth = 1024) {
-            if (file.type === 'application/pdf' || !file.type.startsWith('image/')) return file;
-            return new Promise((resolve) => {
-                const objectURL = URL.createObjectURL(file);
-                const img = new Image();
-                img.onerror = () => { URL.revokeObjectURL(objectURL); resolve(file); };
-                img.onload = () => {
-                    try {
-                        const canvas = document.createElement('canvas');
-                        const scale = Math.min(maxWidth / img.width, 1);
-                        canvas.width = Math.max(1, Math.round(img.width * scale));
-                        canvas.height = Math.max(1, Math.round(img.height * scale));
-                        const ctx = canvas.getContext('2d');
-                        if (!ctx) { URL.revokeObjectURL(objectURL); resolve(file); return; }
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        canvas.toBlob((blob) => {
-                            URL.revokeObjectURL(objectURL);
-                            resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }) : file);
-                        }, 'image/jpeg', 0.68);
-                    } catch (_) { URL.revokeObjectURL(objectURL); resolve(file); }
-                };
-                img.src = objectURL;
-            });
-        }
-
-        async function sendMessage() {
-            lastSentReplyText = "";
-            const input = document.getElementById('user-input'); const msg = input.value.trim();
-            if (!msg && attachedFiles.length === 0) return;
-            
-            input.value = ''; freshChatLiveEligible = false; checkInput(); 
-            
-            if (!currentSessionId) currentSessionId = "BeastSession_" + Date.now();
-            document.getElementById('welcome-box').style.display = 'none'; 
-            const chatBox = document.getElementById('chat-box'); 
-            chatBox.classList.replace('hidden', 'flex'); 
-            document.getElementById('send-btn').disabled = true;
-            
-            const currentFilesSnapshot = attachedFiles.map(f => ({ name: f.name, isPdf: f.isPdf, preview: f.preview }));
-            
-            // 🚀 FIXED: Added "animate-msg" class for smooth pop-in
-            let userHtml = `<div class="flex justify-end w-full mb-6 animate-msg"><div class="bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md text-zinc-900 dark:text-zinc-100 px-5 py-3 rounded-[1.5rem] rounded-tr-sm max-w-[85%] text-[15px] sm:text-base leading-relaxed shadow-sm border border-black/5 dark:border-white/10">`;
-            
-            if (currentFilesSnapshot.length > 0) { 
-                userHtml += `<div class="flex flex-wrap gap-2 justify-end mb-2">`; 
-                currentFilesSnapshot.forEach(f => { 
-                    if (f.isPdf) { userHtml += `<div class="px-3 py-2 bg-red-900/80 rounded border border-red-500 text-xs font-bold flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> ${escapeHTML(f.name)}</div>`; } 
-                    else { userHtml += `<img src="${f.preview}" class="max-h-32 rounded-xl object-cover shadow-sm">`; } 
-                }); 
-                userHtml += `</div>`; 
-            }
-            if (msg) userHtml += `<span class="font-medium">${escapeHTML(msg)}</span>`; 
-            userHtml += `</div></div>`; 
-            chatBox.insertAdjacentHTML('beforeend', userHtml);
-            
-            const msgId = Date.now();
-            let loaderHTML = `<div id="loader-${msgId}" class="pl-[2.7rem] sm:pl-[3.2rem]"><div class="jumping-dots text-zinc-500 dark:text-zinc-400 py-2"><span></span><span></span><span></span></div></div>`; 
-            
-            // 🚀 FIXED: Added "animate-msg" class to Beast's container
-            const beastHtml = `<div id="beast-wrap-${msgId}" class="flex flex-col items-start w-full max-w-[90%] mb-6 animate-msg"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div>${loaderHTML}<div id="beast-box-${msgId}" class="pl-[2.7rem] sm:pl-[3.2rem] w-full hidden"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100"></div></div></div>`;
-            chatBox.insertAdjacentHTML('beforeend', beastHtml); 
-            lucide.createIcons(); 
-            document.getElementById('scroll-container').scrollTop = document.getElementById('scroll-container').scrollHeight;
-
-            const formData = new FormData(); 
-            formData.append('message', msg); 
-            formData.append('mode', currentMode); 
-            formData.append('speed', currentSpeed);
-            
-            // Older/corrupt saved sessions must not break the request before its try/catch.
-            let session = { pinned: false, messages: [] };
-            try {
-                const rawSession = currentSessionId ? localStorage.getItem(currentSessionId) : null;
-                const parsedSession = rawSession ? JSON.parse(rawSession) : null;
-                if (parsedSession && Array.isArray(parsedSession.messages)) {
-                    session = { ...parsedSession, messages: parsedSession.messages };
-                }
-            } catch (sessionError) {
-                console.warn('Ignoring an invalid saved chat session and starting a clean history.', sessionError);
-            }
-            let chatHistory = session.messages.slice(-100)
-                .filter(m => m && typeof m === 'object')
-                .map(m => ({ type: m.type || m.role || 'user', message: String(m.message ?? m.text ?? m.content ?? '') }))
-                .filter(m => m.message.trim());
-            formData.append('history', JSON.stringify(chatHistory));
-            try {
-                for (let i = 0; i < attachedFiles.length; i++) {
-                    formData.append('files', await compressImage(attachedFiles[i].file));
-                }
-                clearAllAttachments();
-                // 🚀 CLOUDFLARE FETCH DIRECTED TO RENDER
-                const chatController = new AbortController();
-                const chatTimer = setTimeout(() => chatController.abort(), 55000);
-                let res;
-                try {
-                    res = await fetch('https://beast-ai-v2.onrender.com/api/chat', { method: 'POST', body: formData, signal: chatController.signal });
-                } finally { clearTimeout(chatTimer); }
-                let data = await res.json().catch(() => ({}));
-                if (!res.ok && !data.reply) {
-                    data.reply = `Request failed (HTTP ${res.status}). Reduce attachment size or check the Render service logs.`;
-                    data.error = true;
-                }
-                if (data.media_pending) data = await waitForMediaJob(data, msgId);
-                const loader = document.getElementById(`loader-${msgId}`); 
-                const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
-                const targetBox = targetBoxWrap.querySelector('.prose');
-                let replyText = responseToDisplayText(data, currentMode) || "The backend returned an empty response.";
-                lastSentReplyText = replyText;
-                
-                loader.style.display = 'none'; 
-                targetBoxWrap.classList.remove('hidden'); 
-                targetBox.innerHTML = renderMarkdown(replyText);
-                if (window.lucide) lucide.createIcons(); 
-                
-                // 🚀 FIXED: Added beautiful blur text-reveal animation upon load
-                targetBox.classList.add('text-reveal');
-                
-                targetBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800'));
-                
-                lucide.createIcons(); 
-                session.messages.push({type:'user', message:msg, files: currentFilesSnapshot}, {type:'beast', message:replyText, mode: currentMode}); 
-                localStorage.setItem(currentSessionId, JSON.stringify(session));
-            } catch(e) { 
-                document.getElementById(`loader-${msgId}`).style.display = 'none'; 
-                const targetBoxWrap = document.getElementById(`beast-box-${msgId}`); 
-                lastSentReplyText = e && e.name === "AbortError" ? "This request took too long and was stopped so the chat would not keep loading forever. Please retry, or check /api/health and the deployment logs. ⏳" : `Connection error: ${e && e.message ? e.message : "request failed"}. Check /api/health and the deployment logs. ⚠️`;
-                if (targetBoxWrap) {
-                    targetBoxWrap.classList.remove('hidden');
-                    const errorReply = targetBoxWrap.querySelector('.prose');
-                    if (errorReply) errorReply.innerHTML = renderMarkdown(lastSentReplyText);
-                }
-            }
-            lucide.createIcons(); 
-            document.getElementById('send-btn').disabled = false; 
-            document.getElementById('scroll-container').scrollTop = document.getElementById('scroll-container').scrollHeight; 
-            loadHistory();
-            currentMode = 'chat'; document.getElementById('user-input').placeholder = "Ask Beast...";
-            renderAttachmentPreviews(); checkInput(); 
-            return lastSentReplyText;
-        }
-
-        function appendHistoryMessage(m) { 
-            const chatBox = document.getElementById('chat-box'); 
-            if (m.type === 'user') { 
-                let inner = `<div class="flex justify-end w-full mb-6"><div class="bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md text-zinc-900 dark:text-zinc-100 px-5 py-3 rounded-[1.5rem] rounded-tr-sm max-w-[85%] text-[15px] sm:text-base leading-relaxed shadow-sm border border-black/5 dark:border-white/10">`; 
-                if (m.files && m.files.length > 0) { 
-                    inner += `<div class="flex flex-wrap gap-2 justify-end mb-2">`; 
-                    m.files.forEach(f => { 
-                        if (f.isPdf) { inner += `<div class="px-3 py-2 bg-red-900/80 rounded border border-red-500 text-xs font-bold flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i> ${escapeHTML(f.name)}</div>`; } 
-                        else { inner += `<img src="${f.preview}" class="max-h-32 rounded-xl object-cover shadow-sm">`; } 
-                    }); 
-                    inner += `</div>`; 
-                } 
-                if (m.message) inner += `<span class="font-medium">${escapeHTML(m.message)}</span>`; 
-                chatBox.insertAdjacentHTML('beforeend', inner + `</div></div>`); 
-            } else { 
-                let contentHtml = renderMarkdown(m.message); 
-                const html = `<div class="flex flex-col items-start w-full max-w-[90%] mb-6"><div class="flex items-center gap-3 mb-2"><img src="/beast_ai.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shadow-sm bg-black"><span class="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide drop-shadow-md">Beast AI</span></div><div class="pl-[2.7rem] sm:pl-[3.2rem] w-full"><div class="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed break-words w-full max-w-none text-zinc-900 dark:text-zinc-100">${contentHtml}</div></div></div>`; 
-                chatBox.insertAdjacentHTML('beforeend', html); 
-                chatBox.querySelectorAll('pre').forEach(pre => pre.classList.add('bg-[#1e1e20]/90', 'backdrop-blur-md', 'text-zinc-100', 'p-4', 'rounded-xl', 'overflow-x-auto', 'my-4', 'border', 'border-zinc-800')); 
-            } 
-        }
-        function handleFile(inputElement) { const newFiles = Array.from(inputElement.files); if (attachedFiles.length + newFiles.length > 20) { alert("The Beast can process a max of 20 files! 🦖"); return; } newFiles.forEach(file => { const isPdf = file.type === 'application/pdf'; const reader = new FileReader(); reader.onload = (e) => { attachedFiles.push({ file: file, preview: isPdf ? null : e.target.result, isPdf: isPdf, name: file.name }); renderAttachmentPreviews(); }; reader.readAsDataURL(file); }); inputElement.value = ''; }
-        function renderAttachmentPreviews() {
-            const container = document.getElementById('attachment-preview');
-            container.innerHTML = '';
-            const modeLabels = { image: { label: 'Images', icon: 'image', style: 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200' }, video: { label: 'Videos', icon: 'video', style: 'bg-violet-50 dark:bg-violet-950/60 border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-200' }, 'video-fast': { label: 'Videos · Fast', icon: 'zap', style: 'bg-violet-50 dark:bg-violet-950/60 border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-200' } };
-            if (modeLabels[currentMode]) {
-                const info = modeLabels[currentMode];
-                const chip = document.createElement('div');
-                chip.className = `relative flex-shrink-0 h-14 px-4 pr-10 rounded-2xl border flex items-center gap-2 text-sm font-bold ${info.style}`;
-                chip.innerHTML = `<i data-lucide="${info.icon}" class="w-4 h-4"></i><span>${info.label}</span><button type="button" onclick="setGenMode('chat')" aria-label="Remove ${info.label} mode" title="Return to normal chat" class="absolute -top-1.5 -right-1.5 bg-zinc-800 hover:bg-black text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`;
-                container.appendChild(chip);
-            }
-            attachedFiles.forEach((f, index) => {
-                const div = document.createElement('div'); div.className = 'relative flex-shrink-0 inline-block';
-                if (f.isPdf) div.innerHTML = `<div class="h-14 w-14 bg-red-100 border-2 border-red-900 rounded-xl flex items-center justify-center text-xs font-bold text-red-900 shadow-sm p-1 text-center overflow-hidden"><i data-lucide="file-text" class="w-4 h-4 mb-1"></i></div>`;
-                else div.innerHTML = `<img src="${f.preview}" class="h-14 w-auto rounded-xl shadow-sm object-cover">`;
-                div.innerHTML += `<button onclick="removeSpecificAttachment(${index})" class="absolute -top-2 -right-2 bg-zinc-800 text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`;
-                container.appendChild(div);
-            });
-            if (attachedFiles.length === 0 && !modeLabels[currentMode]) container.classList.replace('flex', 'hidden');
-            else container.classList.replace('hidden', 'flex');
-            checkInput(); lucide.createIcons(); 
-        }
-        function removeSpecificAttachment(index) { attachedFiles.splice(index, 1); renderAttachmentPreviews(); }
-        function clearAllAttachments() { attachedFiles = []; document.getElementById('file-input').value = ''; renderAttachmentPreviews(); }
-    </script>
-
-    <!-- WebGL -->
-    <script type="module">
-        import { Renderer, Program, Mesh, Color, Triangle } from 'https://esm.sh/ogl@1.0.11';
-        const config = { colorStops: ['#09090b', '#2563eb', '#9333ea'], amplitude: 1.0, blend: 0.5, speed: 1.1 };
-        const container = document.getElementById('aurora-container'); const renderer = new Renderer({ alpha: true, premultipliedAlpha: true, antialias: true }); const gl = renderer.gl; gl.clearColor(0, 0, 0, 0); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.canvas.style.backgroundColor = 'transparent'; Object.assign(gl.canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', display: 'block' }); container.appendChild(gl.canvas);
-        const VERT = `#version 300 es\nin vec2 position; void main() { gl_Position = vec4(position, 0.0, 1.0); }`;
-        const FRAG = `#version 300 es\nprecision highp float;\nuniform float uTime; uniform float uAmplitude; uniform vec3 uColorStops[3]; uniform vec2 uResolution; uniform float uBlend;\nout vec4 fragColor;\nvec3 permute(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }\nfloat snoise(vec2 v){\nconst vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);\nvec2 i  = floor(v + dot(v, C.yy)); vec2 x0 = v - i + dot(i, C.xx);\nvec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);\nvec4 x12 = x0.xyxy + C.xxzz; x12.xy -= i1; i = mod(i, 289.0);\nvec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));\nvec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);\nm = m * m; m = m * m;\nvec3 x = 2.0 * fract(p * C.www) - 1.0; vec3 h = abs(x) - 0.5; vec3 ox = floor(x + 0.5);\nvec3 a0 = x - ox; m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);\nvec3 g; g.x  = a0.x  * x0.x  + h.x  * x0.y; g.yz = a0.yz * x12.xz + h.yz * x12.yw;\nreturn 130.0 * dot(m, g);\n}\nstruct ColorStop { vec3 color; float position; };\n#define COLOR_RAMP(colors, factor, finalColor) { int index = 0; for (int i = 0; i < 2; i++) { ColorStop currentColor = colors[i]; bool isInBetween = currentColor.position <= factor; index = int(mix(float(index), float(i), float(isInBetween))); } ColorStop currentColor = colors[index]; ColorStop nextColor = colors[index + 1]; float range = nextColor.position - currentColor.position; float lerpFactor = (factor - currentColor.position) / range; finalColor = mix(currentColor.color, nextColor.color, lerpFactor); }\nvoid main() {\nvec2 uv = gl_FragCoord.xy / uResolution;\nColorStop colors[3]; colors[0] = ColorStop(uColorStops[0], 0.0); colors[1] = ColorStop(uColorStops[1], 0.5); colors[2] = ColorStop(uColorStops[2], 1.0);\nvec3 rampColor; COLOR_RAMP(colors, uv.x, rampColor);\nfloat height = snoise(vec2(uv.x * 2.0 + uTime * 0.1, uTime * 0.25)) * 0.5 * uAmplitude;\nheight = exp(height); height = (uv.y * 2.0 - height + 0.2);\nfloat intensity = 0.6 * height; float midPoint = 0.20;\nfloat auroraAlpha = smoothstep(midPoint - uBlend * 0.5, midPoint + uBlend * 0.5, intensity);\nvec3 auroraColor = intensity * rampColor;\nfragColor = vec4(auroraColor * auroraAlpha, auroraAlpha);\n}`;
-        const geometry = new Triangle(gl); if (geometry.attributes.uv) delete geometry.attributes.uv; const colorStopsArray = config.colorStops.map(hex => { const c = new Color(hex); return [c.r, c.g, c.b]; });
-        const program = new Program(gl, { vertex: VERT, fragment: FRAG, uniforms: { uTime: { value: 0 }, uAmplitude: { value: config.amplitude }, uColorStops: { value: colorStopsArray }, uResolution: { value: [window.innerWidth, window.innerHeight] }, uBlend: { value: config.blend } } });
-        const mesh = new Mesh(gl, { geometry, program }); const resize = () => { renderer.setSize(window.innerWidth, window.innerHeight); if (program) program.uniforms.uResolution.value = [window.innerWidth, window.innerHeight]; }; window.addEventListener('resize', resize); resize();
-        let animateId = 0; const startT = performance.now();
-        const update = t => { animateId = requestAnimationFrame(update); if(!document.body.classList.contains('dark')) return; const time = (t - startT) * 0.001; program.uniforms.uTime.value = time * config.speed; renderer.render({ scene: mesh }); }; animateId = requestAnimationFrame(update);
-    </script>
-<!-- ============ FIREBASE LOGIN LOGIC ============ -->
-<script>
-(() => {
-    const API_BASE = 'https://beast-ai-v2.onrender.com'; // API base for the rest of Beast AI; Firebase email auth itself needs no backend OTP route.
-    const firebaseConfig = {
-        apiKey: "AIzaSyD13CUubFUmTP37JKXQSAdsyKPfnkVRit4",
-        authDomain: "beast-ai-by-chiranth.firebaseapp.com",
-        projectId: "beast-ai-by-chiranth",
-        storageBucket: "beast-ai-by-chiranth.firebasestorage.app",
-        messagingSenderId: "104511228248",
-        appId: "1:104511228248:web:6e20957fdc54ffd12efd2d"
-    };
-    const FB = 'https://www.gstatic.com/firebasejs/13.1.0/';
-    const $ = (id) => document.getElementById(id);
-    let pendingEmail = localStorage.getItem('emailForSignIn') || '';
-    let firebasePromise = null;
-
-    if (localStorage.getItem('beast-theme') === 'dark') document.body.classList.add('dark');
-
-    function savedAuth() {
-        try { return JSON.parse(localStorage.getItem('beast-auth') || 'null'); }
-        catch (_) { return null; }
+def _apipass_http_json(path: str, method: str = "GET", payload: dict[str, Any] | None = None, timeout: int = 25) -> dict[str, Any]:
+    """Call API Pass with a server-side Bearer token."""
+    if not APIPASS_API_KEY:
+        raise RuntimeError("APIPASS_API_KEY is missing from this deployment's environment variables. 🔑")
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    headers = {
+        "Authorization": f"Bearer {APIPASS_API_KEY}",
+        "Accept": "application/json",
+        "User-Agent": USER_AGENT,
     }
-    function msg(text, good = false) {
-        const el = $('auth-msg');
-        if (!el) return;
-        el.textContent = text || '';
-        el.className = 'text-sm text-center font-semibold mt-3 min-h-[1.25rem] ' + (good ? 'text-green-600' : 'text-red-500');
-    }
-    function busy(on) {
-        ['auth-google-btn', 'auth-send-btn', 'auth-resend-btn'].forEach(id => {
-            const b = $(id);
-            if (b) { b.disabled = on; b.style.opacity = on ? '0.6' : ''; }
-        });
-    }
-    function show(step) {
-        ['choose', 'email', 'code'].forEach(s => {
-            const el = $('auth-step-' + s);
-            if (!el) return;
-            el.classList.toggle('hidden', s !== step);
-            el.classList.toggle('flex', s === step);
-        });
-        msg('');
-        if (step === 'email') setTimeout(() => $('auth-email')?.focus(), 50);
-    }
-    function refreshAccountButtons() {
-        const a = savedAuth();
-        document.querySelectorAll('.auth-logout-text').forEach(el => { el.textContent = (a && a.type !== 'guest') ? 'Log out' : 'Log in'; });
-        document.querySelectorAll('.auth-logout-btn').forEach(el => { el.title = (a && a.email) ? a.email : 'Guest'; });
-    }
-    function finish(auth) {
-        localStorage.setItem('beast-auth', JSON.stringify(auth));
-        $('auth-gate').style.display = 'none';
-        try {
-            if (auth.name && !userName) {
-                userName = auth.name.split(' ')[0].toUpperCase();
-                localStorage.setItem('beast-username', userName);
-                $('name-modal')?.classList.add('hidden');
-                if (typeof setGreeting === 'function') setGreeting();
-            }
-        } catch (_) {}
-        refreshAccountButtons();
-    }
-    async function getFirebase() {
-        if (!firebasePromise) {
-            firebasePromise = (async () => {
-                const [appMod, authMod] = await Promise.all([
-                    import(FB + 'firebase-app.js'),
-                    import(FB + 'firebase-auth.js')
-                ]);
-                const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebaseConfig);
-                const auth = authMod.getAuth(app);
-                return { appMod, authMod, auth };
-            })();
-        }
-        return firebasePromise;
-    }
-    function friendlyAuthError(error) {
-        const code = (error && error.code) || '';
-        if (code === 'auth/unauthorized-domain') return 'This website is not in Firebase Authentication → Settings → Authorized domains.';
-        if (code === 'auth/operation-not-allowed') return 'Enable Email/Password and Email link (passwordless sign-in) in Firebase Authentication.';
-        if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') return 'This sign-in link has expired or was already used. Request a new link.';
-        if (code === 'auth/invalid-email') return 'Please enter a valid email address.';
-        if (code === 'auth/network-request-failed') return 'Network error. Check your connection and try again.';
-        if (code === 'auth/too-many-requests') return 'Too many attempts. Please wait a little and try again.';
-        return (error && error.message) ? error.message : 'Authentication failed. Please try again.';
-    }
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+    url = APIPASS_BASE_URL + "/" + path.lstrip("/")
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        raw = response.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"API Pass returned a non-JSON response (HTTP {response.status}).") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("API Pass returned an unexpected response format.")
+    api_code = parsed.get("code")
+    if api_code not in (None, 200, "200") or parsed.get("success") is False:
+        detail = parsed.get("message") or parsed.get("error") or "request rejected"
+        raise RuntimeError(f"API Pass rejected the request ({api_code}): {str(detail)[:900]}")
+    return parsed
 
-    window.authShow = show;
-    window.authGuest = () => finish({ type: 'guest' });
-    window.authLogout = async () => {
-        localStorage.removeItem('beast-auth');
-        localStorage.removeItem('emailForSignIn');
-        try { const { authMod, auth } = await getFirebase(); await authMod.signOut(auth); } catch (_) {}
-        location.reload();
-    };
 
-    window.authGoogle = async () => {
-        msg(''); busy(true);
-        try {
-            const { authMod, auth } = await getFirebase();
-            const provider = new authMod.GoogleAuthProvider();
-            provider.setCustomParameters({ prompt: 'select_account' });
-            const { user } = await authMod.signInWithPopup(auth, provider);
-            finish({ type: 'google', email: user.email || '', name: user.displayName || '', photo: user.photoURL || '', uid: user.uid });
-        } catch (e) {
-            const code = (e && e.code) || '';
-            msg(code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request'
-                ? 'Google sign-in was cancelled.'
-                : code === 'auth/popup-blocked'
-                    ? 'Your browser blocked the Google popup. Allow popups for this site and try again.'
-                    : code === 'auth/unauthorized-domain'
-                        ? 'Add this website to Firebase Authentication → Settings → Authorized domains.'
-                        : code === 'auth/operation-not-allowed'
-                            ? 'Google sign-in is not enabled in Firebase yet.'
-                            : 'Google sign-in failed: ' + friendlyAuthError(e));
-        } finally { busy(false); }
-    };
+def _start_apipass_video(prompt: str, mode: str):
+    """Submit a 1080p, 8-second Veo 3.1 quality or Fast job."""
+    if not APIPASS_API_KEY:
+        return jsonify({
+            "reply": "Video generation is not configured yet. Add APIPASS_API_KEY to the hosting environment and redeploy. 🔑",
+            "error": True,
+        }), 200
+    clean_prompt = prompt.strip()[:4000]
+    if not clean_prompt:
+        return jsonify({"reply": "Describe the video you want to create. 🎬", "error": True}), 200
 
-    // Firebase sends the sign-in link itself; no Brevo, Resend, OTP_SECRET, or backend OTP route is used.
-    window.authSendCode = async (isResend = false) => {
-        const email = (isResend ? pendingEmail : ($('auth-email')?.value || '')).trim().toLowerCase();
-        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-            show('email');
-            return msg('Enter a valid email address.');
-        }
-        busy(true); msg('Sending sign-in link…', true);
-        try {
-            const { authMod, auth } = await getFirebase();
-            const actionCodeSettings = {
-                url: window.location.origin + window.location.pathname,
-                handleCodeInApp: true
-            };
-            await authMod.sendSignInLinkToEmail(auth, email, actionCodeSettings);
-            pendingEmail = email;
-            localStorage.setItem('emailForSignIn', email);
-            $('auth-email-shown').textContent = email;
-            show('code');
-            msg('Sign-in link sent! Open the email on this device to continue.', true);
-        } catch (e) {
-            msg(friendlyAuthError(e));
-        } finally { busy(false); }
-    };
-
-    async function completeEmailLinkIfPresent() {
-        try {
-            const { authMod, auth } = await getFirebase();
-            if (!authMod.isSignInWithEmailLink(auth, window.location.href)) return;
-            $('auth-gate').style.display = 'flex';
-            show('code');
-            msg('Completing email sign-in…', true);
-            let email = localStorage.getItem('emailForSignIn') || '';
-            if (!email) {
-                email = window.prompt('Enter the email address that received this sign-in link:') || '';
-            }
-            email = email.trim().toLowerCase();
-            if (!email) {
-                show('email');
-                msg('Enter the same email address that received the sign-in link.');
-                return;
-            }
-            const { user } = await authMod.signInWithEmailLink(auth, email, window.location.href);
-            localStorage.removeItem('emailForSignIn');
-            pendingEmail = '';
-            try { window.history.replaceState({}, document.title, window.location.pathname); } catch (_) {}
-            finish({ type: 'email', email: user.email || email, name: user.displayName || '', photo: user.photoURL || '', uid: user.uid });
-            msg('Signed in successfully.', true);
-        } catch (e) {
-            $('auth-gate').style.display = 'flex';
-            show('email');
-            $('auth-email').value = localStorage.getItem('emailForSignIn') || '';
-            msg(friendlyAuthError(e));
-        }
+    fast_mode = mode == "video-fast"
+    model = APIPASS_VEO_FAST_MODEL if fast_mode else APIPASS_VEO_QUALITY_MODEL
+    payload = {
+        "model": model,
+        "channel": APIPASS_CHANNEL,
+        "input": {
+            "prompt": clean_prompt,
+            "aspect_ratio": "LANDSCAPE",
+            "video_generate_type": "text_to_video",
+            "duration": APIPASS_VIDEO_DURATION,
+            "resolution": APIPASS_VIDEO_RESOLUTION,
+        },
     }
+    try:
+        submitted = _apipass_http_json("jobs/createTask", method="POST", payload=payload, timeout=30)
+        data = submitted.get("data") if isinstance(submitted.get("data"), dict) else {}
+        task_id = data.get("taskId") or submitted.get("taskId")
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise RuntimeError("API Pass did not return a taskId. Check the API Pass response and account credits.")
+        label = "Veo 3.1 Fast" if fast_mode else "Veo 3.1 Quality"
+        return jsonify({
+            "media_pending": True,
+            "request_id": task_id,
+            "provider": "APIPASS",
+            "mode": mode,
+            "media_type": "video",
+            "reply": f"Generating with Google {label} at 1080p (8 seconds). This can take a few minutes… 🎬",
+        }), 202
+    except Exception as exc:
+        app.logger.exception("API Pass video submission failed")
+        detail = _provider_error(exc, "API Pass") if isinstance(exc, (urllib.error.HTTPError, urllib.error.URLError)) else str(exc)
+        return jsonify({"reply": f"Video generation could not start: {detail[:900]} ⚠️", "error": True}), 200
 
-    const isLikelyEmailLink = /[?&](?:mode=signIn|oobCode)=/i.test(window.location.search);
-    if (isLikelyEmailLink) $('auth-gate').style.display = 'flex';
-    else if (savedAuth()) $('auth-gate').style.display = 'none';
-    refreshAccountButtons();
-    completeEmailLinkIfPresent();
-})();
-</script>
-</body>
-</html>
+
+def _poll_apipass_video(task_id: str):
+    """Poll API Pass and return the generated MP4 URL when the task finishes."""
+    if not APIPASS_API_KEY:
+        return jsonify({"reply": "APIPASS_API_KEY is missing from the hosting environment. 🔑", "error": True}), 200
+    if not isinstance(task_id, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,180}", task_id):
+        return jsonify({"reply": "The API Pass task ID is invalid. Start a new video generation. ⚠️", "error": True}), 400
+    try:
+        encoded_id = urllib.parse.quote(task_id, safe="")
+        response_data = _apipass_http_json(f"jobs/recordInfo?taskId={encoded_id}", method="GET", timeout=25)
+        data = response_data.get("data") if isinstance(response_data.get("data"), dict) else response_data
+        state = str(data.get("state") or data.get("status") or "").strip().lower()
+        result_obj = data.get("resultJson") or data.get("result") or data.get("output")
+        if isinstance(result_obj, str):
+            try:
+                result_obj = json.loads(result_obj)
+            except json.JSONDecodeError:
+                result_obj = {"url": result_obj} if result_obj.startswith(("https://", "http://")) else {}
+
+        if state in {"success", "succeeded", "completed", "complete", "done"}:
+            video_url = _find_media_url(result_obj) or _find_media_url(data.get("resultUrls")) or _find_media_url(data)
+            if not isinstance(video_url, str) or not video_url.startswith("https://"):
+                return jsonify({"reply": "API Pass marked this job complete but did not return a secure video URL. ⚠️", "error": True}), 200
+            return _media_response("video", video_url, "API Pass · Google Veo 3.1", "🎬 Generated with Google Veo 3.1 at 1080p, 8 seconds.")
+
+        if state in {"fail", "failed", "failure", "error", "cancelled", "canceled"}:
+            detail = data.get("failMsg") or data.get("message") or data.get("failCode") or "The provider could not complete this video."
+            return jsonify({"reply": f"API Pass video generation failed: {str(detail)[:900]} ⚠️", "error": True}), 200
+
+        return jsonify({
+            "media_pending": True,
+            "request_id": task_id,
+            "provider": "APIPASS",
+            "mode": "video",
+            "media_type": "video",
+            "queue_status": state or "processing",
+            "reply": "Google Veo 3.1 is generating your 1080p video… 🎬",
+        }), 200
+    except Exception as exc:
+        detail = _provider_error(exc, "API Pass status") if isinstance(exc, (urllib.error.HTTPError, urllib.error.URLError)) else str(exc)
+        return jsonify({"reply": f"Could not check API Pass video status: {detail[:900]} ⚠️", "error": True}), 200
+
+
+
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+)
+
+app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = MAX_REQUEST_BYTES
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+
+# Beast AI's creator identity and emoji policy are enforced server-side so they
+# apply regardless of which configured text model handles a request.
+CREATOR_REPLY = "Beast AI was created by Chiranth when he was in 8th grade! 🚀"
+
+_EMOJI_PATTERN = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]")
+_CREATOR_QUESTION_PATTERNS = tuple(re.compile(pattern, re.IGNORECASE) for pattern in (
+    r"\bwho\s+(?:actually\s+)?(?:made|created|built|developed|designed|invented)\s+(?:you|u|beast(?:\s*ai)?|this\s+ai)\b",
+    r"\bwho\s+(?:is|'s)\s+your\s+(?:creator|maker|developer|founder|builder|author|owner)\b",
+    r"\b(?:your|beast\s*ai(?:'s)?)\s+(?:creator|maker|developer|founder|builder|author|owner)\b",
+    r"\bwho\s+(?:created|built|developed|founded|owns)\s+(?:the\s+)?beast\s*ai\b",
+    r"\bwho\s+(?:is|are)\s+behind\s+(?:you|beast(?:\s*ai)?)\b",
+    r"\b(?:were|are)\s+you\s+(?:made|created|built|developed)\s+by\s+(?:whom|who)\b",
+    r"\bdid\s+chiranth\s+(?:make|create|build|develop)\s+(?:you|beast(?:\s*ai)?)\b",
+    r"\bwho\s+is\s+the\s+creator\s+of\s+(?:you|beast(?:\s*ai)?)\b",
+))
+
+
+def _is_creator_question(message: str) -> bool:
+    """Recognize common ways users ask who created or built Beast AI."""
+    normalized = re.sub(r"\s+", " ", message).strip()
+    return any(pattern.search(normalized) for pattern in _CREATOR_QUESTION_PATTERNS)
+
+
+def _ensure_reply_emoji(text: str) -> str:
+    """Guarantee at least one emoji in a user-facing text reply."""
+    cleaned = text.rstrip()
+    if not cleaned:
+        return "🙂"
+    if _EMOJI_PATTERN.search(cleaned):
+        return cleaned
+    return f"{cleaned} 🙂"
+
+
+@app.after_request
+def _enforce_emoji_on_text_replies(response):
+    """Safety net for generated answers and text errors; preserve media URLs."""
+    if not response.is_json:
+        return response
+    payload = response.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return response
+    reply = payload.get("reply")
+    if not isinstance(reply, str) or not reply.strip():
+        return response
+    # The frontend detects a raw URL to render generated images/videos.
+    if re.fullmatch(r"https?://\S+", reply.strip()):
+        return response
+    updated = _ensure_reply_emoji(reply)
+    if updated != reply:
+        payload["reply"] = updated
+        response.set_data(app.json.dumps(payload))
+        response.headers["Content-Type"] = "application/json"
+    return response
+
+
+def configured_gemini_keys() -> list[str]:
+    return [
+        value.strip()
+        for name in ["GEMINI_API_KEY"] + [f"GEMINI_API_KEY_{i}" for i in range(1, 10)]
+        if (value := os.environ.get(name)) and value.strip()
+    ]
+
+
+
+def _chat_history(raw: Any) -> list[dict[str, str]]:
+    """Parse frontend chat history into normalized provider messages.
+
+    The current frontend sends [{type: "user"|"beast", message: "..."}],
+    while some clients send [{role: "user"|"assistant", text: "..."}].
+    Accept both formats and ignore malformed entries safely.
+    """
+    if isinstance(raw, str):
+        try:
+            items = json.loads(raw)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return []
+    else:
+        items = raw
+
+    if not isinstance(items, list):
+        return []
+
+    normalized: list[dict[str, str]] = []
+    for item in items[-100:]:
+        if not isinstance(item, dict):
+            continue
+
+        raw_role = item.get("role") or item.get("type") or "user"
+        role_value = str(raw_role).strip().lower()
+        if role_value in {"user", "human"}:
+            role = "user"
+        elif role_value in {"assistant", "model", "beast", "beast ai", "ai"}:
+            role = "assistant"
+        else:
+            continue
+
+        raw_text = item.get("text")
+        if not isinstance(raw_text, str) or not raw_text.strip():
+            raw_text = item.get("message")
+        if not isinstance(raw_text, str):
+            raw_text = item.get("content")
+        if not isinstance(raw_text, str):
+            continue
+
+        text = raw_text.strip()
+        if not text:
+            continue
+        normalized.append({"role": role, "text": text[:16000]})
+
+    # Keep a bounded recent window so repeated chats cannot grow request payloads forever.
+    return normalized[-40:]
+
+def _json_request_body() -> dict[str, Any]:
+    if request.is_json:
+        body = request.get_json(silent=True)
+        return body if isinstance(body, dict) else {}
+    return {}
+
+
+def _http_request_json(url: str, api_key: str, payload: dict[str, Any], timeout: int) -> dict[str, Any]:
+    encoded = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=encoded,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        content = response.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Provider returned non-JSON response (HTTP {response.status}).") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("Provider returned an unexpected JSON response.")
+        return parsed
+
+
+def _provider_error(exc: Exception, provider: str) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")[:1200]
+        except Exception:
+            detail = "No error body was provided."
+        return f"{provider} returned HTTP {exc.code}: {detail}"
+    if isinstance(exc, urllib.error.URLError):
+        return f"{provider} network error: {exc.reason}"
+    return f"{provider} error: {str(exc)[:1200]}"
+
+
+def _find_media_url(payload: Any) -> str | None:
+    """Handle common direct and nested URL shapes without pretending job IDs are files."""
+    if isinstance(payload, str):
+        value = payload.strip()
+        return value if value.startswith(("https://", "http://")) else None
+    if isinstance(payload, list):
+        for item in payload:
+            result = _find_media_url(item)
+            if result:
+                return result
+        return None
+    if not isinstance(payload, dict):
+        return None
+    for key in ("url", "image_url", "video_url", "videoUrl", "output_url", "download_url", "uri"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip().startswith(("https://", "http://")):
+            return value.strip()
+    for key in ("data", "image", "images", "video", "videos", "output", "outputs", "result", "results", "resultUrls", "result_urls", "artifacts"):
+        if key in payload:
+            result = _find_media_url(payload[key])
+            if result:
+                return result
+    return None
+
+
+def _media_response(media_type: str, url: str, provider: str, note: str = ""):
+    return jsonify({
+        "reply": url,
+        "media_type": media_type,
+        "media_url": url,
+        "provider": provider,
+        "note": note,
+    }), 200
+
+
+def _cloudflare_image_bytes(prompt: str) -> tuple[bytes, str]:
+    """Generate an image with Cloudflare Workers AI and return (bytes, MIME type)."""
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
+        raise RuntimeError(
+            "Image generation is not configured. Add CLOUDFLARE_ACCOUNT_ID and "
+            "CLOUDFLARE_API_TOKEN to your hosting environment, then redeploy. 🔑"
+        )
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", CLOUDFLARE_ACCOUNT_ID):
+        raise RuntimeError("CLOUDFLARE_ACCOUNT_ID does not look valid. Check the Cloudflare dashboard. ⚠️")
+    clean_prompt = prompt.strip()
+    if not clean_prompt:
+        raise ValueError("Describe the image you want to generate. 🎨")
+    if len(clean_prompt) > 2048:
+        clean_prompt = clean_prompt[:2048]
+
+    model_path = urllib.parse.quote(CLOUDFLARE_IMAGE_MODEL, safe="@/")
+    endpoint = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/{model_path}"
+    # FLUX.1 Schnell REST schema rejects `seed` in this account/API schema.
+    # Keep only documented request fields.
+    payload = {"prompt": clean_prompt}
+    req = urllib.request.Request(
+        endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}",
+            "Content-Type": "application/json",
+            "Accept": "image/jpeg, application/json",
+            "User-Agent": USER_AGENT,
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=45 if IS_VERCEL else 75) as response:
+        raw = response.read()
+        content_type = response.headers.get_content_type().lower()
+
+    if content_type.startswith("image/"):
+        return raw, content_type
+
+    # The Workers AI REST API commonly wraps its base64 image in result.image.
+    try:
+        data = json.loads(raw.decode("utf-8", errors="replace"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # Some compatible response paths may return raw image bytes with a generic MIME type.
+        if raw.startswith(b"\xff\xd8\xff"):
+            return raw, "image/jpeg"
+        if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+            return raw, "image/png"
+        raise RuntimeError(f"Cloudflare Workers AI returned an unrecognized response (Content-Type: {content_type}).")
+
+    if not isinstance(data, dict):
+        raise RuntimeError("Cloudflare Workers AI returned an unexpected response.")
+    if data.get("success") is False:
+        errors = data.get("errors") or []
+        detail = "; ".join(str(e.get("message", e)) if isinstance(e, dict) else str(e) for e in errors)
+        raise RuntimeError("Cloudflare Workers AI rejected the request: " + (detail[:700] or "unknown API error"))
+    result = data.get("result", data)
+    encoded = result.get("image") if isinstance(result, dict) else None
+    if not isinstance(encoded, str) or not encoded.strip():
+        raise RuntimeError("Cloudflare Workers AI response did not include an image.")
+    encoded = encoded.strip()
+    mime_type = "image/jpeg"
+    if encoded.startswith("data:") and "," in encoded:
+        data_header, encoded = encoded.split(",", 1)
+        if ";" in data_header:
+            mime_type = data_header[5:].split(";", 1)[0] or mime_type
+    try:
+        image_bytes = base64.b64decode(encoded, validate=False)
+    except Exception as exc:
+        raise RuntimeError("Cloudflare Workers AI returned invalid base64 image data.") from exc
+    if not image_bytes:
+        raise RuntimeError("Cloudflare Workers AI returned an empty image.")
+    return image_bytes, mime_type if mime_type.startswith("image/") else "image/jpeg"
+
+
+def _image_error_svg(message: str) -> bytes:
+    """Show a readable error inside the generated-image slot if the provider fails."""
+    safe = html.escape(message[:220])
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="190" viewBox="0 0 720 190">'
+        '<rect width="100%" height="100%" rx="16" fill="#f7f7f7" stroke="#d4d4d4"/>'
+        '<text x="24" y="48" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="#222">Image generation failed ⚠️</text>'
+        f'<foreignObject x="24" y="65" width="672" height="105"><div xmlns="http://www.w3.org/1999/xhtml" '
+        'style="font:15px Arial,sans-serif;color:#444;overflow-wrap:anywhere;">'
+        f'{safe}</div></foreignObject></svg>'
+    )
+    return svg.encode("utf-8")
+
+
+def _start_cloudflare_image(message: str):
+    """Return Markdown pointing at our backend image proxy; no frontend changes needed."""
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
+        return jsonify({
+            "reply": "Image generation needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in your hosting environment. Add both and redeploy. 🔑",
+            "error": True,
+        }), 200
+    # The browser requests this same-origin endpoint to receive the actual image bytes.
+    image_base = os.environ.get("PUBLIC_API_BASE_URL", "https://beast-ai-v2.onrender.com").rstrip("/")
+    image_url = image_base + "/api/media/image?" + urllib.parse.urlencode({"prompt": message[:2048]})
+    return jsonify({
+        "reply": f"![Generated image](<{image_url}>)\n\n🎨",
+        "provider": "Cloudflare Workers AI · FLUX.1 Schnell",
+    }), 200
+
+
+@app.route("/api/media/image", methods=["GET"])
+def cloudflare_media_image():
+    """Proxy one generated image as bytes so the current frontend can render it without JS changes."""
+    prompt = request.args.get("prompt", "").strip()
+    if not prompt:
+        return app.response_class(_image_error_svg("The image prompt is missing."), status=400, mimetype="image/svg+xml")
+    try:
+        image_bytes, mime_type = _cloudflare_image_bytes(prompt)
+        response = app.response_class(image_bytes, status=200, mimetype=mime_type)
+        # Browser caching avoids regenerating the exact same prompt when the image is revisited.
+        response.headers["Cache-Control"] = "public, max-age=1800"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+    except Exception as exc:
+        app.logger.exception("Cloudflare Workers AI image generation failed")
+        message = _provider_error(exc, "Cloudflare Workers AI") if isinstance(exc, (urllib.error.HTTPError, urllib.error.URLError)) else str(exc)
+        return app.response_class(_image_error_svg(message), status=200, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
+def _openai_compatible_chat(api_url: str, api_key: str, model: str, history: list[dict[str, str]], message: str, system_prompt: str, timeout: int) -> str:
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    for item in history:
+        messages.append({"role": item["role"], "content": item["text"]})
+    if message:
+        messages.append({"role": "user", "content": message})
+    result = _http_request_json(
+        api_url,
+        api_key,
+        {"model": model, "messages": messages},
+        timeout=timeout,
+    )
+    choices = result.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise ValueError("Provider response did not include chat choices.")
+    choice = choices[0]
+    content = choice.get("message", {}).get("content") if isinstance(choice, dict) else None
+    if isinstance(content, list):
+        content = "\n".join(part.get("text", "") for part in content if isinstance(part, dict))
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("Provider returned an empty assistant message.")
+    return content.strip()
+
+
+def _generate_with_groq(message: str, history: list[dict[str, str]], system_prompt: str) -> tuple[str | None, list[str]]:
+    """Fast text-only fallback using the same Groq key as Whisper, when configured."""
+    if not GROQ_API_KEY:
+        return None, []
+    try:
+        text = _openai_compatible_chat(
+            "https://api.groq.com/openai/v1/chat/completions",
+            GROQ_API_KEY, GROQ_CHAT_MODEL, history, message, system_prompt,
+            timeout=8,
+        )
+        return text, []
+    except Exception as exc:
+        return None, [_provider_error(exc, "Groq chat")]
+
+
+def _generate_with_gemini(keys: list[str], message: str, history: list[dict[str, str]], files: list[dict[str, Any]], system_prompt: str, started: float) -> tuple[str | None, list[str]]:
+    """Try the configured Gemini model and current stable fallbacks with hard time limits."""
+    errors: list[str] = []
+    if not GENAI_AVAILABLE:
+        return None, ["Python dependency google-genai is not installed. Re-deploy after installing requirements.txt."]
+    if not keys:
+        return None, ["No Gemini API key is configured. Add GEMINI_API_KEY (or GEMINI_API_KEY_1 through _9)."]
+
+    # Respect a custom GEMINI_MODEL first, but do not let a bad/overloaded model
+    # block normal chat. These IDs are confirmed in Google's current model guide.
+    model_candidates: list[str] = []
+    for candidate in (GEMINI_MODEL, "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.7-flash"):
+        candidate = str(candidate or "").strip()
+        if candidate and candidate not in model_candidates:
+            model_candidates.append(candidate)
+
+    keys_to_try = list(keys)
+    random.shuffle(keys_to_try)
+
+    contents = []
+    for item in history:
+        role = "user" if item["role"] == "user" else "model"
+        contents.append(types.Content(role=role, parts=[types.Part.from_text(text=item["text"])]))
+    parts = []
+    if message:
+        parts.append(types.Part.from_text(text=message))
+    for uploaded in files:
+        parts.append(types.Part.from_bytes(data=uploaded["bytes"], mime_type=uploaded["mime_type"]))
+    if parts:
+        contents.append(types.Content(role="user", parts=parts))
+
+    # Prefer trying several models with one key before burning the entire request
+    # window cycling through keys for the same model. Every SDK call is single-shot;
+    # fallback/retry decisions are made here under our own time budget.
+    attempts = [(key, model) for model in model_candidates for key in keys_to_try]
+    timeout_seconds = GEMINI_TIMEOUT_MS / 1000
+    for key, model in attempts:
+        if time.time() - started >= GEMINI_BUDGET_SECONDS - timeout_seconds:
+            errors.append("Gemini fallback budget reached; stopped further attempts so the chat request can finish.")
+            break
+        try:
+            client = genai.Client(
+                api_key=key,
+                http_options=types.HttpOptions(
+                    timeout=GEMINI_TIMEOUT_MS,
+                    retry_options=types.HttpRetryOptions(attempts=1),
+                ),
+            )
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    automatic_continuation=False,
+                ),
+            )
+            result_text = response.text
+            if isinstance(result_text, str) and result_text.strip():
+                return result_text.strip(), errors
+            errors.append(f"Gemini model {model} returned no text.")
+        except Exception as exc:
+            description = str(exc)
+            if "safety" in description.lower():
+                return "The request was blocked by Gemini's safety filters. ⚠️", errors
+            # Keep UI/error responses short; detailed provider error is still in server logs.
+            app.logger.warning("Gemini request failed for model %s: %s", model, description[:500])
+            errors.append(f"Gemini model {model}: {description[:350]}")
+    return None, errors
+
+
+@app.route("/api/live/transcribe", methods=["POST"])
+def groq_live_transcribe():
+    """Transcribe one recorded voice turn with Groq Whisper. API key stays server-side."""
+    if not GROQ_API_KEY:
+        return jsonify({"error": "Voice mode is not configured. Add GROQ_API_KEY to your hosting environment and redeploy. 🎙️"}), 503
+    upload = request.files.get("audio") or request.files.get("file")
+    if upload is None:
+        return jsonify({"error": "No audio file received. Allow microphone access and try again. 🎙️"}), 400
+    audio_bytes = upload.read()
+    if not audio_bytes:
+        return jsonify({"error": "The audio recording was empty. Please record again. 🎙️"}), 400
+    # Vercel requests have a small body limit; fail with a useful message before contacting Groq.
+    if len(audio_bytes) > (3_700_000 if IS_VERCEL else 18_000_000):
+        return jsonify({"error": "That voice recording is too large. Keep each voice turn under about 45 seconds and try again. 🎙️"}), 413
+    mime_type = (upload.mimetype or "audio/webm").split(";")[0].strip().lower()
+    extensions = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "mp4", "audio/mpeg": "mp3", "audio/wav": "wav", "audio/x-wav": "wav", "audio/flac": "flac"}
+    extension = extensions.get(mime_type, "webm")
+    filename = f"beast-voice.{extension}"
+    boundary = "----BeastAIVoice" + str(random.randint(10**10, 10**12 - 1))
+    crlf = b"\r\n"
+    parts = []
+    def field(name: str, value: str) -> None:
+        parts.extend([b"--" + boundary.encode(), crlf,
+                      f'Content-Disposition: form-data; name="{name}"'.encode(), crlf,
+                      b"Content-Type: text/plain; charset=utf-8", crlf, crlf,
+                      value.encode("utf-8"), crlf])
+    field("model", GROQ_WHISPER_MODEL)
+    field("response_format", "json")
+    field("temperature", "0")
+    parts.extend([b"--" + boundary.encode(), crlf,
+                  f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode(), crlf,
+                  f"Content-Type: {mime_type}".encode(), crlf, crlf,
+                  audio_bytes, crlf,
+                  b"--" + boundary.encode() + b"--", crlf])
+    body = b"".join(parts)
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/audio/transcriptions",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=40 if IS_VERCEL else 60) as response:
+            result = json.loads(response.read().decode("utf-8", errors="replace"))
+        transcript = str(result.get("text", "")).strip() if isinstance(result, dict) else ""
+        if not transcript:
+            return jsonify({"error": "Groq Whisper returned an empty transcript. Try speaking more clearly. 🎙️"}), 502
+        return jsonify({"text": transcript, "model": GROQ_WHISPER_MODEL}), 200
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:700]
+        app.logger.warning("Groq Whisper returned HTTP %s: %s", exc.code, detail)
+        return jsonify({"error": f"Groq Whisper returned HTTP {exc.code}: {detail or 'No details provided.'}"}), exc.code
+    except (urllib.error.URLError, TimeoutError) as exc:
+        app.logger.warning("Groq Whisper connection failed: %s", exc)
+        return jsonify({"error": "Could not reach Groq Whisper. Check connectivity and try again. 🎙️"}), 502
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        app.logger.warning("Groq Whisper returned invalid JSON: %s", exc)
+        return jsonify({"error": "Groq Whisper returned an unreadable response. Please retry. 🎙️"}), 502
+
+
+@app.route("/api/live/token", methods=["POST"])
+def create_gemini_live_token():
+    """Create a short-lived, single-use Gemini Live token for the browser."""
+    if not GENAI_AVAILABLE or genai is None:
+        return jsonify({"error": "The google-genai package is not installed. Check deployment build logs."}), 503
+    keys = configured_gemini_keys()
+    if not keys:
+        return jsonify({"error": "Gemini Live needs GEMINI_API_KEY (or GEMINI_API_KEY_1 through _9) configured on the server."}), 503
+    try:
+        now = datetime.now(timezone.utc)
+        client = genai.Client(api_key=keys[0])
+        token = client.auth_tokens.create(config={
+            "uses": 1,
+            "expire_time": now + timedelta(minutes=30),
+            "new_session_expire_time": now + timedelta(minutes=1),
+            "live_connect_constraints": {
+                "model": GEMINI_LIVE_MODEL,
+                "config": {
+                    "response_modalities": ["AUDIO"],
+                    "input_audio_transcription": {},
+                    "output_audio_transcription": {},
+                    "system_instruction": {"parts": [{"text": LIVE_SYSTEM_INSTRUCTION}]},
+                },
+            },
+        })
+        token_value = getattr(token, "name", None)
+        if not token_value:
+            raise RuntimeError("Gemini did not return an ephemeral token.")
+        return jsonify({"token": token_value, "model": GEMINI_LIVE_MODEL}), 200
+    except Exception as exc:
+        app.logger.exception("Gemini Live token creation failed")
+        detail = str(exc).strip() or exc.__class__.__name__
+        return jsonify({"error": "Could not create a Gemini Live session token: " + detail[:900]}), 502
+
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Beast AI Core is online. Use /api/health for status."
+
+
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    keys = configured_gemini_keys()
+    return jsonify({
+        "status": "online",
+        "target": APP_TARGET,
+        "genai_installed": GENAI_AVAILABLE,
+        "gemini_keys_configured": len(keys),
+        "models": {
+            "gemini": GEMINI_MODEL,
+            "gemini_live": "Groq Whisper transcription + browser speech output",
+            "groq_whisper": GROQ_WHISPER_MODEL,
+            "groq_chat": GROQ_CHAT_MODEL,
+            "grok": GROK_MODEL,
+            "kira_fast": KIRA_FLASH_MODEL,
+            "kira_pro": KIRA_PRO_MODEL,
+            "cloudflare_image": CLOUDFLARE_IMAGE_MODEL,
+            "veo_3_1_quality": APIPASS_VEO_QUALITY_MODEL,
+            "veo_3_1_fast": APIPASS_VEO_FAST_MODEL,
+            "video_resolution": APIPASS_VIDEO_RESOLUTION,
+            "video_duration_seconds": int(APIPASS_VIDEO_DURATION),
+        },
+        "features": {
+            "chat": True,
+            "live_voice": bool(GROQ_API_KEY),
+            "groq_whisper": bool(GROQ_API_KEY),
+            "groq_chat": bool(GROQ_API_KEY),
+            "attachments": GENAI_AVAILABLE and bool(keys),
+            "image_generation": bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN),
+            "video_generation": bool(APIPASS_API_KEY),
+            "video_generation_fast": bool(APIPASS_API_KEY),
+            "apipass_configured": bool(APIPASS_API_KEY),
+            "kira_pro_chat": bool(os.environ.get("KIRA_PRO_API_KEY")),
+        },
+    }), 200
+
+
+# Compatibility: some old clients pinged /api/chat with GET. Return health instead of 405.
+@app.route("/api/chat", methods=["GET"])
+def chat_health_compat():
+    return health_check()
+
+
+@app.route("/api/media/status", methods=["POST"])
+def media_status():
+    body = _json_request_body()
+    mode = body.get("mode", "image")
+    request_id = body.get("request_id", "")
+    provider = str(body.get("provider", "")).strip().lower()
+    if provider in {"apipass", "api pass"}:
+        return _poll_apipass_video(request_id)
+    return jsonify({"reply": "Unknown media provider. Start a new generation with the current Beast AI version. ⚠️", "error": True}), 400
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    started = time.time()
+    try:
+        body = _json_request_body()
+        message = (request.form.get("message") if request.form else None) or body.get("message", "")
+        mode = (request.form.get("mode") if request.form else None) or body.get("mode", "chat")
+        speed = (request.form.get("speed") if request.form else None) or body.get("speed", "normal")
+        history_raw = (request.form.get("history") if request.form else None) or json.dumps(body.get("history", []))
+        message = message.strip() if isinstance(message, str) else ""
+        mode = mode if mode in {"chat", "image", "video", "video-fast"} else "chat"
+        speed = speed if speed in {"fast", "normal", "pro", "kira-pro"} else "normal"
+        history = _chat_history(history_raw)
+
+        files = request.files.getlist("files") if request.files else []
+        uploaded_files: list[dict[str, Any]] = []
+        for uploaded in files:
+            content = uploaded.read()
+            if not content:
+                continue
+            uploaded_files.append({
+                "bytes": content,
+                "mime_type": uploaded.mimetype or "application/octet-stream",
+                "filename": uploaded.filename or "attachment",
+            })
+        if not message and not uploaded_files:
+            return jsonify({"reply": "Type a message or attach a file first."}), 200
+
+        # Answer creator questions deterministically rather than relying on a provider prompt.
+        if mode == "chat" and not uploaded_files and message and _is_creator_question(message):
+            return jsonify({"reply": CREATOR_REPLY, "provider": "Beast AI"}), 200
+
+        if mode == "image":
+            if not message:
+                return jsonify({"reply": "Describe the image you want to generate. 🎨"}), 200
+            return _start_cloudflare_image(message)
+        if mode in {"video", "video-fast"}:
+            if not message:
+                return jsonify({"reply": "Describe the video clip you want to create. 🎬"}), 200
+            # Use API Pass only for native Google Veo 3.1 video generation.
+            return _start_apipass_video(message, mode)
+
+        ist = timezone(timedelta(hours=5, minutes=30))
+        live_time = datetime.now(ist).strftime("%A, %d %B %Y, %I:%M %p IST")
+        system_prompt = (
+            "You are Beast AI, a friendly, useful, witty assistant. Be clear and direct.\n"
+            "Creator identity: Beast AI was created by Chiranth when he was in 8th grade. "
+            "If asked who created, made, built, developed, founded, or owns Beast AI, answer that clearly. "
+            "Be transparent that the underlying AI models are provided by external services; do not claim Chiranth personally trained those models.\n"
+            "Emoji rule: Every user-facing text reply must include at least one relevant emoji. "
+            "If your draft has none, add one naturally at the end. Do not overuse emojis.\n"
+            f"Current local time: {live_time}.\n"
+            "Use Markdown for structure when it helps. Do not claim you generated media unless the API confirms it."
+        )
+        errors: list[str] = []
+        final_text: str | None = None
+        used_provider = ""
+        gemini_keys = configured_gemini_keys()
+
+        # Only route to the selected third-party chat tier when there are no file attachments.
+        if not uploaded_files and speed == "kira-pro":
+            kira_pro_key = os.environ.get("KIRA_PRO_API_KEY", "").strip()
+            if kira_pro_key:
+                try:
+                    final_text = _openai_compatible_chat(
+                        f"{KIRA_API_BASE_URL}/chat/completions", kira_pro_key, KIRA_PRO_MODEL,
+                        history, message, system_prompt, timeout=8,
+                    )
+                    used_provider = "Kira Pro"
+                except Exception as exc:
+                    errors.append(_provider_error(exc, "Kira Pro"))
+            else:
+                errors.append("KIRA_PRO_API_KEY is not configured; falling back to Gemini.")
+
+        elif not uploaded_files and speed == "pro":
+            grok_key = os.environ.get("GROK_API_KEY", "").strip()
+            if grok_key:
+                try:
+                    final_text = _openai_compatible_chat(
+                        "https://api.x.ai/v1/chat/completions", grok_key, GROK_MODEL,
+                        history, message, system_prompt, timeout=8,
+                    )
+                    used_provider = "Grok"
+                except Exception as exc:
+                    errors.append(_provider_error(exc, "Grok"))
+            else:
+                errors.append("GROK_API_KEY is not configured; falling back to Gemini.")
+
+        elif not uploaded_files and speed == "fast":
+            kira_key = os.environ.get("KIRA_FLASH_API_KEY", "").strip()
+            if kira_key:
+                try:
+                    final_text = _openai_compatible_chat(
+                        f"{KIRA_API_BASE_URL}/chat/completions", kira_key, KIRA_FLASH_MODEL,
+                        history, message, system_prompt, timeout=8,
+                    )
+                    used_provider = "Kira Fast"
+                except Exception as exc:
+                    errors.append(_provider_error(exc, "Kira Fast"))
+            else:
+                errors.append("KIRA_FLASH_API_KEY is not configured; falling back to Gemini.")
+
+        # Normal text chat uses Groq first when its key is present. This avoids making
+        # every ordinary message wait on a temporarily overloaded Gemini endpoint.
+        # Attachments still go to Gemini because this text endpoint cannot inspect files.
+        if not final_text and not uploaded_files and speed == "normal":
+            final_text, groq_errors = _generate_with_groq(message, history, system_prompt)
+            errors.extend(groq_errors)
+            if final_text:
+                used_provider = "Groq"
+
+        if not final_text:
+            final_text, gemini_errors = _generate_with_gemini(
+                gemini_keys, message, history, uploaded_files, system_prompt, started,
+            )
+            errors.extend(gemini_errors)
+            if final_text:
+                used_provider = "Gemini"
+
+        # Groq is also the next fallback for selected tiers or when Gemini is overloaded.
+        if not final_text and not uploaded_files:
+            final_text, groq_errors = _generate_with_groq(message, history, system_prompt)
+            errors.extend(groq_errors)
+            if final_text:
+                used_provider = "Groq fallback"
+
+        # Last-resort text fallback is used only for text-only requests. It cannot inspect attachments.
+        if not final_text and not uploaded_files:
+            try:
+                encoded_prompt = urllib.parse.quote(message, safe="")
+                encoded_system = urllib.parse.quote(system_prompt, safe="")
+                fallback_url = f"https://text.pollinations.ai/{encoded_prompt}?system={encoded_system}"
+                req = urllib.request.Request(fallback_url, headers={"User-Agent": USER_AGENT})
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    final_text = response.read().decode("utf-8", errors="replace").strip()
+                    used_provider = "Pollinations fallback"
+            except Exception as exc:
+                errors.append(_provider_error(exc, "Text fallback"))
+
+        if not final_text:
+            app.logger.error("All text providers failed for this request: %s", " | ".join(errors[-8:]))
+            return jsonify({
+                "reply": "I couldn't get a response from the text models just now. Please try again in a moment. If this keeps happening, check the hosting logs and the configured API keys. ⚠️",
+                "error": True,
+            }), 503
+
+        notice = ""
+        if used_provider == "Pollinations fallback":
+            notice = "My primary text model was temporarily unavailable, so I used a backup provider. 🔄"
+        return jsonify({"reply": final_text, "provider": used_provider, "notice": notice}), 200
+
+    except Exception as exc:
+        app.logger.exception("Unhandled Beast AI request error")
+        if isinstance(exc, (ValueError, TypeError)):
+            message = str(exc)
+        else:
+            message = f"Unexpected backend error: {type(exc).__name__}. Check server logs."
+        return jsonify({"reply": message, "error": True}), 200
+
+
+@app.errorhandler(413)
+def request_too_large(_error):
+    size_mb = round(MAX_REQUEST_BYTES / (1024 * 1024), 1)
+    return jsonify({
+        "reply": f"Your upload is too large for this deployment. Keep the total request under about {size_mb} MB, or upload fewer/smaller files.",
+        "error": True,
+    }), 413
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port)
