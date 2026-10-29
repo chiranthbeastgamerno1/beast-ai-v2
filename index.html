@@ -252,11 +252,11 @@
                         </button>
                         <button onclick="setGenMode('video'); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
                             <i data-lucide="video" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
-                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Video Generation · Veo 3.1 1080p</span>
+                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Video Generation</span>
                         </button>
                         <button onclick="setGenMode('video-fast'); toggleAttachDropdown(event);" class="w-full text-left px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors flex items-center gap-3">
                             <i data-lucide="zap" class="w-4 h-4 text-zinc-700 dark:text-zinc-300"></i>
-                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Video Generation · Veo 3.1 Fast 1080p</span>
+                            <span class="text-[14px] font-semibold text-zinc-900 dark:text-white">Video Generation Fast</span>
                         </button>
                     </div>
                 </div>
@@ -296,7 +296,7 @@
 
     <script>
         lucide.createIcons();
-        let currentMode = 'chat'; let currentSpeed = 'normal'; let attachedFiles = []; let currentSessionId = null;
+        let currentMode = 'chat'; let currentSpeed = 'normal'; let videoDuration = '8'; let attachedFiles = []; let currentSessionId = null;
         let userName = localStorage.getItem('beast-username'); let isDesktopSidebarLocked = localStorage.getItem('beast-sidebar-locked') === 'true';
         let freshChatLiveEligible = true;
 
@@ -342,7 +342,7 @@
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 const loader = document.getElementById(`loader-${msgId}`);
                 if (loader) {
-                    const statusText = job.reply || (String(provider).toLowerCase() === 'apipass' ? 'Generating Google Veo 3.1 video at 1080p… 🎬' : 'Generating media…');
+                    const statusText = job.reply || 'Generating video… 🎬';
                     loader.innerHTML = `<div class="text-sm text-zinc-500 dark:text-zinc-400 py-2">${escapeHTML(statusText)}</div><div class="jumping-dots text-zinc-500 dark:text-zinc-400 py-1"><span></span><span></span><span></span></div>`;
                 }
                 await new Promise(resolve => setTimeout(resolve, 4000));
@@ -365,7 +365,7 @@
                 if (!response.ok && !job.reply) job.reply = `Media status request failed (HTTP ${response.status}). ⚠️`;
                 if (!job.media_pending) return job;
             }
-            return { reply: 'Your Veo 3.1 video is still processing. It can take several minutes; start a new request only if this task ultimately fails. ⏳', error: true };
+            return { reply: 'Your video is still processing. Please check again shortly. ⏳', error: true };
         }
 
         function renderMarkdown(text) {
@@ -403,6 +403,10 @@
             const menu = document.getElementById('attach-dropdown-menu'); const icon = document.getElementById('plus-icon');
             if(isAttachMenuOpen) { menu.classList.remove('hidden'); menu.classList.add('flex'); icon.style.transform = 'rotate(45deg)'; } 
             else { menu.classList.add('hidden'); menu.classList.remove('flex'); icon.style.transform = 'rotate(0deg)'; }
+        }
+
+        function setVideoDuration(value) {
+            videoDuration = ['4', '6', '8'].includes(String(value)) ? String(value) : '8';
         }
 
         function setGenMode(type) {
@@ -737,6 +741,7 @@
             formData.append('message', msg); 
             formData.append('mode', currentMode); 
             formData.append('speed', currentSpeed);
+            formData.append('video_duration', videoDuration);
             
             // Older/corrupt saved sessions must not break the request before its try/catch.
             let session = { pinned: false, messages: [] };
@@ -840,7 +845,10 @@
                 const info = modeLabels[currentMode];
                 const chip = document.createElement('div');
                 chip.className = `relative flex-shrink-0 h-14 px-4 pr-10 rounded-2xl border flex items-center gap-2 text-sm font-bold ${info.style}`;
-                chip.innerHTML = `<i data-lucide="${info.icon}" class="w-4 h-4"></i><span>${info.label}</span><button type="button" onclick="setGenMode('chat')" aria-label="Remove ${info.label} mode" title="Return to normal chat" class="absolute -top-1.5 -right-1.5 bg-zinc-800 hover:bg-black text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`;
+                const durationControl = currentMode === 'video'
+                    ? `<select id="video-duration-select" aria-label="Video duration" title="Video duration" onchange="setVideoDuration(this.value)" class="max-w-[72px] bg-white/70 dark:bg-black/20 border border-current/15 rounded-lg px-1.5 py-1 text-xs font-semibold outline-none"><option value="4" ${videoDuration === '4' ? 'selected' : ''}>4 sec</option><option value="6" ${videoDuration === '6' ? 'selected' : ''}>6 sec</option><option value="8" ${videoDuration === '8' ? 'selected' : ''}>8 sec</option></select>`
+                    : '';
+                chip.innerHTML = `<i data-lucide="${info.icon}" class="w-4 h-4"></i><span>${info.label}</span>${durationControl}<button type="button" onclick="setGenMode('chat')" aria-label="Remove ${info.label} mode" title="Return to normal chat" class="absolute -top-1.5 -right-1.5 bg-zinc-800 hover:bg-black text-white p-1 rounded-full shadow-md z-10"><i data-lucide="x" class="w-3 h-3"></i></button>`;
                 container.appendChild(chip);
             }
             attachedFiles.forEach((f, index) => {
