@@ -69,10 +69,12 @@ if APIPASS_CHANNEL not in {"auto", "starter", "regular", "official"}:
     APIPASS_CHANNEL = "auto"
 
 APIPASS_VEO_QUALITY_MODEL = "google/veo-3-1-quality"
-APIPASS_VEO_FAST_MODEL = "google/veo-3-1-fast"
-APIPASS_VIDEO_RESOLUTION = "1080p"
-# Veo 3.1 requires 8 seconds when requesting 1080p output.
-APIPASS_VIDEO_DURATION = "8"
+APIPASS_GROK_FAST_MODEL = "grok-imagine/text-to-video"
+APIPASS_VIDEO_RESOLUTION = "720p"
+APIPASS_VEO_DEFAULT_DURATION = "8"
+# ApiPass documents Grok Imagine text-to-video at 6–30 seconds; 6 seconds is the shortest supported option.
+APIPASS_GROK_FAST_DURATION = 6
+APIPASS_VEO_ALLOWED_DURATIONS = {"4", "6", "8"}
 
 
 def _apipass_http_json(path: str, method: str = "GET", payload: dict[str, Any] | None = None, timeout: int = 25) -> dict[str, Any]:
@@ -104,57 +106,73 @@ def _apipass_http_json(path: str, method: str = "GET", payload: dict[str, Any] |
     return parsed
 
 
-def _start_apipass_video(prompt: str, mode: str):
-    """Submit a 1080p, 8-second Veo 3.1 quality or Fast job."""
+def _start_apipass_video(prompt: str, mode: str, selected_duration: str | None = None):
+    """Submit a cost-conscious 720p Veo 3.1 or Grok Imagine video task."""
     if not APIPASS_API_KEY:
         return jsonify({
-            "reply": "Video generation is not configured yet. Add APIPASS_API_KEY to the hosting environment and redeploy. 🔑",
+            "reply": "Video generation is currently unavailable. Please try again later. ⚠️",
             "error": True,
         }), 200
+
     clean_prompt = prompt.strip()[:4000]
     if not clean_prompt:
         return jsonify({"reply": "Describe the video you want to create. 🎬", "error": True}), 200
 
     fast_mode = mode == "video-fast"
-    model = APIPASS_VEO_FAST_MODEL if fast_mode else APIPASS_VEO_QUALITY_MODEL
-    payload = {
-        "model": model,
-        "channel": APIPASS_CHANNEL,
-        "input": {
+    if fast_mode:
+        model = APIPASS_GROK_FAST_MODEL
+        duration = APIPASS_GROK_FAST_DURATION
+        video_input = {
+            "prompt": clean_prompt,
+            "aspect_ratio": "16:9",
+            "mode": "normal",
+            "duration": duration,
+            "resolution": APIPASS_VIDEO_RESOLUTION,
+        }
+    else:
+        model = APIPASS_VEO_QUALITY_MODEL
+        duration = str(selected_duration or APIPASS_VEO_DEFAULT_DURATION)
+        if duration not in APIPASS_VEO_ALLOWED_DURATIONS:
+            duration = APIPASS_VEO_DEFAULT_DURATION
+        video_input = {
             "prompt": clean_prompt,
             "aspect_ratio": "LANDSCAPE",
             "video_generate_type": "text_to_video",
-            "duration": APIPASS_VIDEO_DURATION,
+            "duration": duration,
             "resolution": APIPASS_VIDEO_RESOLUTION,
-        },
+        }
+
+    payload = {
+        "model": model,
+        "channel": APIPASS_CHANNEL,
+        "input": video_input,
     }
     try:
         submitted = _apipass_http_json("jobs/createTask", method="POST", payload=payload, timeout=30)
         data = submitted.get("data") if isinstance(submitted.get("data"), dict) else {}
         task_id = data.get("taskId") or submitted.get("taskId")
         if not isinstance(task_id, str) or not task_id.strip():
-            raise RuntimeError("API Pass did not return a taskId. Check the API Pass response and account credits.")
-        label = "Veo 3.1 Fast" if fast_mode else "Veo 3.1 Quality"
+            raise RuntimeError("Video task ID was not returned.")
         return jsonify({
             "media_pending": True,
             "request_id": task_id,
             "provider": "APIPASS",
             "mode": mode,
             "media_type": "video",
-            "reply": f"Generating with Google {label} at 1080p (8 seconds). This can take a few minutes… 🎬",
+            "reply": "Generating video… 🎬",
         }), 202
     except Exception as exc:
-        app.logger.exception("API Pass video submission failed")
-        detail = _provider_error(exc, "API Pass") if isinstance(exc, (urllib.error.HTTPError, urllib.error.URLError)) else str(exc)
-        return jsonify({"reply": f"Video generation could not start: {detail[:900]} ⚠️", "error": True}), 200
+        app.logger.exception("Video submission failed")
+        # Detailed provider errors stay in deployment logs rather than the chat UI.
+        return jsonify({"reply": "Could not start video generation. Please try again. ⚠️", "error": True}), 200
 
 
-def _poll_apipass_video(task_id: str):
+def _poll_apipass_video(task_id: str, mode: str = "video"):
     """Poll API Pass and return the generated MP4 URL when the task finishes."""
     if not APIPASS_API_KEY:
-        return jsonify({"reply": "APIPASS_API_KEY is missing from the hosting environment. 🔑", "error": True}), 200
+        return jsonify({"reply": "Video generation is currently unavailable. Please try again later. ⚠️", "error": True}), 200
     if not isinstance(task_id, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,180}", task_id):
-        return jsonify({"reply": "The API Pass task ID is invalid. Start a new video generation. ⚠️", "error": True}), 400
+        return jsonify({"reply": "Could not check video status. Please start a new video. ⚠️", "error": True}), 400
     try:
         encoded_id = urllib.parse.quote(task_id, safe="")
         response_data = _apipass_http_json(f"jobs/recordInfo?taskId={encoded_id}", method="GET", timeout=25)
@@ -170,26 +188,25 @@ def _poll_apipass_video(task_id: str):
         if state in {"success", "succeeded", "completed", "complete", "done"}:
             video_url = _find_media_url(result_obj) or _find_media_url(data.get("resultUrls")) or _find_media_url(data)
             if not isinstance(video_url, str) or not video_url.startswith("https://"):
-                return jsonify({"reply": "API Pass marked this job complete but did not return a secure video URL. ⚠️", "error": True}), 200
-            return _media_response("video", video_url, "API Pass · Google Veo 3.1", "🎬 Generated with Google Veo 3.1 at 1080p, 8 seconds.")
+                return jsonify({"reply": "The video is ready, but its download link was not returned. Please try again. ⚠️", "error": True}), 200
+            return _media_response("video", video_url, "Beast AI", "Video generated successfully. 🎬")
 
         if state in {"fail", "failed", "failure", "error", "cancelled", "canceled"}:
-            detail = data.get("failMsg") or data.get("message") or data.get("failCode") or "The provider could not complete this video."
-            return jsonify({"reply": f"API Pass video generation failed: {str(detail)[:900]} ⚠️", "error": True}), 200
+            app.logger.error("Video task failed (task_id=%s): %s", task_id, data.get("failMsg") or data.get("message") or data.get("failCode") or "unknown error")
+            return jsonify({"reply": "Video generation failed. Please try again. ⚠️", "error": True}), 200
 
         return jsonify({
             "media_pending": True,
             "request_id": task_id,
             "provider": "APIPASS",
-            "mode": "video",
+            "mode": mode if mode in {"video", "video-fast"} else "video",
             "media_type": "video",
             "queue_status": state or "processing",
-            "reply": "Google Veo 3.1 is generating your 1080p video… 🎬",
+            "reply": "Generating video… 🎬",
         }), 200
-    except Exception as exc:
-        detail = _provider_error(exc, "API Pass status") if isinstance(exc, (urllib.error.HTTPError, urllib.error.URLError)) else str(exc)
-        return jsonify({"reply": f"Could not check API Pass video status: {detail[:900]} ⚠️", "error": True}), 200
-
+    except Exception:
+        app.logger.exception("Video status check failed")
+        return jsonify({"reply": "Could not check video status. Please try again shortly. ⚠️", "error": True}), 200
 
 
 USER_AGENT = (
@@ -747,9 +764,10 @@ def health_check():
             "kira_pro": KIRA_PRO_MODEL,
             "cloudflare_image": CLOUDFLARE_IMAGE_MODEL,
             "veo_3_1_quality": APIPASS_VEO_QUALITY_MODEL,
-            "veo_3_1_fast": APIPASS_VEO_FAST_MODEL,
+            "grok_imagine_fast": APIPASS_GROK_FAST_MODEL,
             "video_resolution": APIPASS_VIDEO_RESOLUTION,
-            "video_duration_seconds": int(APIPASS_VIDEO_DURATION),
+            "veo_video_duration_options_seconds": [4, 6, 8],
+            "grok_fast_video_duration_seconds": APIPASS_GROK_FAST_DURATION,
         },
         "features": {
             "chat": True,
@@ -779,7 +797,7 @@ def media_status():
     request_id = body.get("request_id", "")
     provider = str(body.get("provider", "")).strip().lower()
     if provider in {"apipass", "api pass"}:
-        return _poll_apipass_video(request_id)
+        return _poll_apipass_video(request_id, mode)
     return jsonify({"reply": "Unknown media provider. Start a new generation with the current Beast AI version. ⚠️", "error": True}), 400
 
 
@@ -823,7 +841,7 @@ def chat():
             if not message:
                 return jsonify({"reply": "Describe the video clip you want to create. 🎬"}), 200
             # Use API Pass only for native Google Veo 3.1 video generation.
-            return _start_apipass_video(message, mode)
+            return _start_apipass_video(message, mode, request.form.get("video_duration") or body.get("video_duration"))
 
         ist = timezone(timedelta(hours=5, minutes=30))
         live_time = datetime.now(ist).strftime("%A, %d %B %Y, %I:%M %p IST")
